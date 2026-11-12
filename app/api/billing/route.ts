@@ -84,8 +84,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { sessionId, discount } = await req.json();
+    const { sessionId, discount, paymentMethod } = await req.json();
   if (!sessionId) return fail("Missing session", 400);
+  if (!["cash", "upi", "card", "other"].includes(paymentMethod))
+    return fail("Choose how the bill was paid", 400);
 
   const bill = await buildBill(sessionId, Number(discount) || 0);
   if (!bill) return fail("Session not found", 404);
@@ -101,6 +103,7 @@ export async function POST(req: Request) {
       service_charge: bill.service,
       tax: bill.tax,
       total: bill.total,
+      payment_method: paymentMethod,
     })
     .select("bill_number")
     .single();
@@ -111,5 +114,5 @@ export async function POST(req: Request) {
     .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", sessionId);
 
-  return NextResponse.json({ ...bill, billNumber: saved.bill_number });
+    return NextResponse.json({ ...bill, billNumber: saved.bill_number, paymentMethod });
 }

@@ -17,7 +17,15 @@ type Bill = {
   servicePercent: number;
   notServed: number;
   billNumber?: number;
+  paymentMethod?: string;
 };
+
+const METHODS = [
+  { id: "cash", label: "Cash" },
+  { id: "upi", label: "UPI" },
+  { id: "card", label: "Card" },
+  { id: "other", label: "Other" },
+];
 
 const money = (n: number) =>
   "₹" +
@@ -26,6 +34,7 @@ const money = (n: number) =>
 export default function Billing() {
   const [table, setTable] = useState("");
   const [discount, setDiscount] = useState("0");
+  const [method, setMethod] = useState("");
   const [bill, setBill] = useState<Bill | null>(null);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
@@ -47,7 +56,7 @@ export default function Billing() {
   };
 
   const closeBill = async () => {
-    if (!bill || busy) return;
+    if (!bill || busy || !method) return;
     setBusy(true);
     try {
       const res = await fetch("/api/billing", {
@@ -56,6 +65,7 @@ export default function Billing() {
         body: JSON.stringify({
           sessionId: bill.sessionId,
           discount: Number(discount) || 0,
+          paymentMethod: method,
         }),
       });
       const data = await res.json();
@@ -71,6 +81,7 @@ export default function Billing() {
     setBill(null);
     setTable("");
     setDiscount("0");
+    setMethod("");
     setClosed(false);
     setError("");
   };
@@ -84,6 +95,7 @@ export default function Billing() {
           onSubmit={(e) => {
             e.preventDefault();
             setDiscount("0");
+            setMethod("");
             load("0");
           }}
           className="mb-4 flex gap-2 print:hidden"
@@ -173,6 +185,12 @@ export default function Billing() {
                 <span>{money(bill.total)}</span>
               </div>
 
+              {closed && bill.paymentMethod && (
+                <p className="mt-4 text-center">
+                  Paid by {METHODS.find((m) => m.id === bill.paymentMethod)?.label}
+                </p>
+              )}
+
               <p className="mt-6 text-center text-[#1C2333]/60">
                 Thank you. Visit again.
               </p>
@@ -192,10 +210,32 @@ export default function Billing() {
                       className="h-10 w-28 rounded border-2 border-[#1C2333]/40 bg-white px-2 text-right"
                     />
                   </label>
+
+                  <fieldset>
+                    <legend className="mb-2">How was it paid?</legend>
+                    <div className="grid grid-cols-4 gap-2">
+                      {METHODS.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setMethod(m.id)}
+                          aria-pressed={method === m.id}
+                          className={`h-11 rounded-lg border-2 font-semibold ${
+                            method === m.id
+                              ? "border-[#1C2333] bg-[#1C2333] text-white"
+                              : "border-[#1C2333]/40"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+
                   <button
                     onClick={closeBill}
-                    disabled={busy}
-                    className="h-14 w-full rounded-lg bg-[#1C2333] text-lg font-bold text-white disabled:opacity-50"
+                    disabled={busy || !method}
+                    className="h-14 w-full rounded-lg bg-[#1C2333] text-lg font-bold text-white disabled:opacity-40"
                   >
                     {busy ? "Closing table" : "Generate bill and close table"}
                   </button>

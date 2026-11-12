@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type Item = {
@@ -50,6 +50,8 @@ export default function TablePage() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const [query, setQuery] = useState("");
+  const chipsRef = useRef<HTMLElement>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
     null
   );
@@ -69,7 +71,7 @@ export default function TablePage() {
     supabase
       .from("menu_items")
       .select("id, name, description, category, price, is_veg")
-      .order("category")
+      .order("sort_order")
       .order("name")
       .then(({ data }) => setItems(data ?? []));
     loadInfo(t);
@@ -77,11 +79,17 @@ export default function TablePage() {
     return () => clearInterval(timer);
   }, [loadInfo]);
 
+  const q = query.trim().toLowerCase();
+
   const categories = useMemo(() => {
     const map = new Map<string, Item[]>();
-    for (const i of items) map.set(i.category, [...(map.get(i.category) ?? []), i]);
+    for (const i of items) {
+      if (q && !`${i.name} ${i.description ?? ""}`.toLowerCase().includes(q))
+        continue;
+      map.set(i.category, [...(map.get(i.category) ?? []), i]);
+    }
     return [...map.entries()];
-  }, [items]);
+  }, [items, q]);
 
   const change = (id: string, diff: number) =>
     setCart((c) => {
@@ -117,6 +125,7 @@ export default function TablePage() {
       setCart({});
       setReviewing(false);
       setNotice({ ok: true, text: "Order placed. The kitchen has it." });
+      setTimeout(() => setNotice(null), 5000);
       if (token) loadInfo(token);
     } finally {
       setPlacing(false);
@@ -140,26 +149,92 @@ export default function TablePage() {
 
   return (
     <div className={`${wrap} mx-auto max-w-md pb-32`}>
-      <header className="bg-[#1C2333] px-5 pb-5 pt-8 text-white">
-        <p className="text-sm text-white/70">
-          {info ? `Table ${info.table}` : "\u00A0"}
-        </p>
-        <h1 className="text-3xl font-bold leading-tight">
-          {info?.restaurant || "Menu"}
-        </h1>
-      </header>
+      <div className="sticky top-0 z-20">
+        <header className="flex items-baseline justify-between bg-[#1C2333] px-5 py-3 text-white">
+          <h1 className="truncate text-xl font-bold">
+            {info?.restaurant || "Menu"}
+          </h1>
+          <span className="ml-3 shrink-0 text-sm text-white/70">
+            {info ? `Table ${info.table}` : ""}
+          </span>
+        </header>
 
-      {notice && (
-        <p
-          className={`px-5 py-3 text-sm font-medium ${
-            notice.ok ? "bg-green-700 text-white" : "bg-red-700 text-white"
-          }`}
-        >
-          {notice.text}
-        </p>
-      )}
+        {notice && (
+          <p
+            className={`px-5 py-2 text-sm font-medium ${
+              notice.ok ? "bg-green-700 text-white" : "bg-red-700 text-white"
+            }`}
+          >
+            {notice.text}
+          </p>
+        )}
 
-      {info && info.orders.length > 0 && (
+        <div className="border-b border-[#1C2333]/15 bg-[#F2F4F1] px-4 py-3">
+          <div className="relative">
+            <input
+              type="text"
+              enterKeyHint="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search dishes"
+              aria-label="Search dishes"
+              className="h-11 w-full rounded-lg border-2 border-[#1C2333]/30 bg-white pl-3 pr-10 text-base"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-xl"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {!q && (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={() =>
+                  chipsRef.current?.scrollBy({ left: -240, behavior: "smooth" })
+                }
+                aria-label="Scroll categories left"
+                className="hidden h-8 w-8 shrink-0 rounded-full border border-[#1C2333]/30 [@media(hover:hover)]:block"
+              >
+                ‹
+              </button>
+              <nav
+                ref={chipsRef}
+                className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {categories.map(([cat], idx) => (
+                  <button
+                    key={cat}
+                    onClick={() =>
+                      document
+                        .getElementById(`cat-${idx}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className="shrink-0 rounded-full border border-[#1C2333]/30 px-4 py-1.5 text-sm font-medium"
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </nav>
+              <button
+                onClick={() =>
+                  chipsRef.current?.scrollBy({ left: 240, behavior: "smooth" })
+                }
+                aria-label="Scroll categories right"
+                className="hidden h-8 w-8 shrink-0 rounded-full border border-[#1C2333]/30 [@media(hover:hover)]:block"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {info && info.orders.length > 0 && !q && (
         <section className="px-5 pt-5">
           <h2 className="mb-2 text-lg font-bold">Your orders</h2>
           <ul className="divide-y divide-[#1C2333]/15 border-y border-[#1C2333]/15">
@@ -187,25 +262,9 @@ export default function TablePage() {
         </section>
       )}
 
-      <nav className="sticky top-0 z-10 mt-4 flex gap-2 overflow-x-auto border-b border-[#1C2333]/15 bg-[#F2F4F1] px-4 py-3">
-        {categories.map(([cat], idx) => (
-          <button
-            key={cat}
-            onClick={() =>
-              document
-                .getElementById(`cat-${idx}`)
-                ?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-            className="shrink-0 rounded-full border border-[#1C2333]/30 px-4 py-1.5 text-sm font-medium"
-          >
-            {cat}
-          </button>
-        ))}
-      </nav>
-
       <main className="px-5">
         {categories.map(([cat, list], idx) => (
-          <section key={cat} id={`cat-${idx}`} className="scroll-mt-16 pt-6">
+          <section key={cat} id={`cat-${idx}`} className="scroll-mt-44 pt-6">
             <h2 className="mb-1 text-xl font-bold">{cat}</h2>
             <ul className="divide-y divide-[#1C2333]/15">
               {list.map((item) => {
@@ -256,6 +315,11 @@ export default function TablePage() {
         ))}
         {items.length === 0 && (
           <p className="py-10 text-center text-[#1C2333]/70">Loading the menu.</p>
+        )}
+        {items.length > 0 && q && categories.length === 0 && (
+          <p className="py-10 text-center text-[#1C2333]/70">
+            No dishes found for &ldquo;{query}&rdquo;.
+          </p>
         )}
       </main>
 
