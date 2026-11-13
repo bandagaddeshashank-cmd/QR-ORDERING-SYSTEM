@@ -208,7 +208,7 @@ export default function TablePage() {
               alt={info?.restaurant || "Restaurant logo"}
               width={98}
               height={64}
-              className="h-16 w-auto"
+              className="h-20 w-auto"
             />
           </h1>
           <span className="ml-3 shrink-0 text-sm font-semibold text-[#14511D]">
