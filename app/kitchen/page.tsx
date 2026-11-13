@@ -124,8 +124,8 @@ export default function Kitchen() {
                             <b className="tabular-nums">{i.quantity} ×</b>{" "}
                             {i.name_snapshot}
                             {i.note && (
-                              <span className="block text-base text-[#1C2333]/70">
-                                {i.note}
+                              <span className="mt-1 block rounded bg-[#F2B01E]/30 px-2 py-1 text-base font-semibold">
+                                Note: {i.note}
                               </span>
                             )}
                           </li>

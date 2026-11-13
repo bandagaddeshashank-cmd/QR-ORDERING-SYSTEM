@@ -43,11 +43,14 @@ export async function POST(req: Request) {
     const qty = Number(line.quantity);
     if (!m || !Number.isInteger(qty) || qty < 1 || qty > 20)
       return fail("Invalid item", 400);
+        const note =
+      typeof line.note === "string" ? line.note.trim().slice(0, 150) : "";
     rows.push({
       menu_item_id: m.id,
       name_snapshot: m.name,
       price_snapshot: m.price,
       quantity: qty,
+      note: note || null,
     });
   }
 

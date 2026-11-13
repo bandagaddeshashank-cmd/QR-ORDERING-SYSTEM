@@ -27,6 +27,20 @@ const STATUS_TEXT: Record<string, string> = {
   served: "Served",
 };
 
+const chip = (status: string) =>
+  `shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+    status === "ready"
+      ? "bg-green-700 text-white"
+      : status === "served"
+      ? "bg-[#1C2333]/10"
+      : "bg-[#F2B01E]"
+  }`;
+
+const summary = (o: OrderInfo) =>
+  o.order_items.map((i) => `${i.quantity} × ${i.name_snapshot}`).join(", ");
+
+const needsChoice = (i: Item) => i.description?.startsWith("Choice of") ?? false;
+
 function VegMark({ veg }: { veg: boolean }) {
   return (
     <span
@@ -48,13 +62,21 @@ export default function TablePage() {
   const [info, setInfo] = useState<TableInfo | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewing, setReviewing] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [query, setQuery] = useState("");
   const chipsRef = useRef<HTMLElement>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const [stickyH, setStickyH] = useState(176);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
     null
   );
+
+  const showNotice = (ok: boolean, text: string) => {
+    setNotice({ ok, text });
+    setTimeout(() => setNotice(null), 5000);
+  };
 
   const loadInfo = useCallback(async (t: string) => {
     const res = await fetch(`/api/orders?t=${encodeURIComponent(t)}`, {
@@ -78,6 +100,15 @@ export default function TablePage() {
     const timer = setInterval(() => loadInfo(t), 5000);
     return () => clearInterval(timer);
   }, [loadInfo]);
+
+  // Keep category scrolling accurate as the pinned area grows or shrinks
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setStickyH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [invalid]);
 
   const q = query.trim().toLowerCase();
 
@@ -104,8 +135,24 @@ export default function TablePage() {
   const count = cartLines.reduce((s, i) => s + cart[i.id], 0);
   const total = cartLines.reduce((s, i) => s + cart[i.id] * i.price, 0);
 
+  const active = info?.orders.filter((o) => o.status !== "served") ?? [];
+  const served = info?.orders.filter((o) => o.status === "served") ?? [];
+
   const placeOrder = async () => {
     if (placing || count === 0) return;
+
+    const missing = cartLines.find(
+      (i) => needsChoice(i) && !(notes[i.id] ?? "").trim()
+    );
+    if (missing) {
+      setReviewing(false);
+      showNotice(false, `Please write your choice for ${missing.name}`);
+      document
+        .getElementById(`item-${missing.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     setPlacing(true);
     setNotice(null);
     try {
@@ -114,18 +161,22 @@ export default function TablePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          items: cartLines.map((i) => ({ id: i.id, quantity: cart[i.id] })),
+          items: cartLines.map((i) => ({
+            id: i.id,
+            quantity: cart[i.id],
+            note: (notes[i.id] ?? "").trim(),
+          })),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setNotice({ ok: false, text: data.error ?? "Order failed. Please try again." });
+        showNotice(false, data.error ?? "Order failed. Please try again.");
         return;
       }
       setCart({});
+      setNotes({});
       setReviewing(false);
-      setNotice({ ok: true, text: "Order placed. The kitchen has it." });
-      setTimeout(() => setNotice(null), 5000);
+      showNotice(true, "Order placed. The kitchen has it.");
       if (token) loadInfo(token);
     } finally {
       setPlacing(false);
@@ -149,12 +200,18 @@ export default function TablePage() {
 
   return (
     <div className={`${wrap} mx-auto max-w-md pb-32`}>
-      <div className="sticky top-0 z-20">
-        <header className="flex items-baseline justify-between bg-[#1C2333] px-5 py-3 text-white">
-          <h1 className="truncate text-xl font-bold">
-            {info?.restaurant || "Menu"}
+      <div ref={stickyRef} className="sticky top-0 z-20">
+        <header className="flex items-center justify-between border-b border-[#DCB736] bg-[#FFF4C2] px-5 py-2">
+          <h1 className="m-0">
+            <img
+              src="/logo.png"
+              alt={info?.restaurant || "Restaurant logo"}
+              width={98}
+              height={64}
+              className="h-16 w-auto"
+            />
           </h1>
-          <span className="ml-3 shrink-0 text-sm text-white/70">
+          <span className="ml-3 shrink-0 text-sm font-semibold text-[#14511D]">
             {info ? `Table ${info.table}` : ""}
           </span>
         </header>
@@ -167,6 +224,26 @@ export default function TablePage() {
           >
             {notice.text}
           </p>
+        )}
+
+        {active.length > 0 && (
+          <div className="max-h-24 overflow-y-auto border-b border-[#1C2333]/15 bg-white px-5 py-2">
+            <ul className="space-y-1.5">
+              {active.map((o) => (
+                <li
+                  key={o.id}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate" title={summary(o)}>
+                    {summary(o)}
+                  </span>
+                  <span className={chip(o.status)}>
+                    {STATUS_TEXT[o.status] ?? o.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="border-b border-[#1C2333]/15 bg-[#F2F4F1] px-4 py-3">
@@ -234,28 +311,13 @@ export default function TablePage() {
         </div>
       </div>
 
-      {info && info.orders.length > 0 && !q && (
+      {served.length > 0 && !q && (
         <section className="px-5 pt-5">
-          <h2 className="mb-2 text-lg font-bold">Your orders</h2>
+          <h2 className="mb-2 text-lg font-bold">Served</h2>
           <ul className="divide-y divide-[#1C2333]/15 border-y border-[#1C2333]/15">
-            {info.orders.map((o) => (
-              <li key={o.id} className="flex items-start justify-between gap-3 py-3">
-                <span className="text-sm">
-                  {o.order_items
-                    .map((i) => `${i.quantity} × ${i.name_snapshot}`)
-                    .join(", ")}
-                </span>
-                <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                    o.status === "ready"
-                      ? "bg-green-700 text-white"
-                      : o.status === "served"
-                      ? "bg-[#1C2333]/10"
-                      : "bg-[#F2B01E]"
-                  }`}
-                >
-                  {STATUS_TEXT[o.status] ?? o.status}
-                </span>
+            {served.map((o) => (
+              <li key={o.id} className="py-3 text-sm text-[#1C2333]/70">
+                {summary(o)}
               </li>
             ))}
           </ul>
@@ -264,47 +326,74 @@ export default function TablePage() {
 
       <main className="px-5">
         {categories.map(([cat, list], idx) => (
-          <section key={cat} id={`cat-${idx}`} className="scroll-mt-44 pt-6">
+          <section
+            key={cat}
+            id={`cat-${idx}`}
+            className="pt-6"
+            style={{ scrollMarginTop: stickyH + 8 }}
+          >
             <h2 className="mb-1 text-xl font-bold">{cat}</h2>
             <ul className="divide-y divide-[#1C2333]/15">
               {list.map((item) => {
                 const qty = cart[item.id] ?? 0;
                 return (
-                  <li key={item.id} className="flex items-start gap-3 py-4">
-                    <VegMark veg={item.is_veg} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-snug">{item.name}</p>
-                      {item.description && (
-                        <p className="mt-0.5 text-sm text-[#1C2333]/70">
-                          {item.description}
-                        </p>
-                      )}
-                      <p className="mt-1 font-medium tabular-nums">₹{item.price}</p>
-                    </div>
-                    {qty === 0 ? (
-                      <button
-                        onClick={() => change(item.id, 1)}
-                        className="h-10 w-24 rounded-lg border-2 border-[#1C2333] font-bold active:bg-[#1C2333] active:text-white"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <div className="flex h-10 w-24 items-center justify-between rounded-lg bg-[#1C2333] text-white">
+                  <li key={item.id} id={`item-${item.id}`} className="py-4">
+                    <div className="flex items-start gap-3">
+                      <VegMark veg={item.is_veg} />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold leading-snug">{item.name}</p>
+                        {item.description && (
+                          <p className="mt-0.5 text-sm text-[#1C2333]/70">
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="mt-1 font-medium tabular-nums">₹{item.price}</p>
+                      </div>
+                      {qty === 0 ? (
                         <button
-                          aria-label={`Remove one ${item.name}`}
-                          onClick={() => change(item.id, -1)}
-                          className="h-10 w-9 text-xl"
-                        >
-                          −
-                        </button>
-                        <span className="font-bold tabular-nums">{qty}</span>
-                        <button
-                          aria-label={`Add one ${item.name}`}
                           onClick={() => change(item.id, 1)}
-                          className="h-10 w-9 text-xl"
+                          className="h-10 w-24 rounded-lg border-2 border-[#1C2333] font-bold active:bg-[#1C2333] active:text-white"
                         >
-                          +
+                          Add
                         </button>
+                      ) : (
+                        <div className="flex h-10 w-24 items-center justify-between rounded-lg bg-[#1C2333] text-white">
+                          <button
+                            aria-label={`Remove one ${item.name}`}
+                            onClick={() => change(item.id, -1)}
+                            className="h-10 w-9 text-xl"
+                          >
+                            −
+                          </button>
+                          <span className="font-bold tabular-nums">{qty}</span>
+                          <button
+                            aria-label={`Add one ${item.name}`}
+                            onClick={() => change(item.id, 1)}
+                            className="h-10 w-9 text-xl"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {qty > 0 && (
+                      <div className="ml-7 mt-3">
+                        <input
+                          type="text"
+                          maxLength={150}
+                          value={notes[item.id] ?? ""}
+                          onChange={(e) =>
+                            setNotes((n) => ({ ...n, [item.id]: e.target.value }))
+                          }
+                          placeholder={
+                            needsChoice(item)
+                              ? "Your choice, e.g. Manchurian"
+                              : "Note for kitchen, e.g. less spicy"
+                          }
+                          aria-label={`Note for ${item.name}`}
+                          className="h-10 w-full rounded-lg border-2 border-[#1C2333]/30 bg-white px-3 text-base"
+                        />
                       </div>
                     )}
                   </li>
@@ -330,7 +419,14 @@ export default function TablePage() {
               <ul className="divide-y divide-[#1C2333]/15">
                 {cartLines.map((i) => (
                   <li key={i.id} className="flex items-center justify-between gap-3 py-2">
-                    <span className="min-w-0 flex-1">{i.name}</span>
+                    <span className="min-w-0 flex-1">
+                      {i.name}
+                      {(notes[i.id] ?? "").trim() && (
+                        <small className="block text-[#1C2333]/70">
+                          Note: {notes[i.id].trim()}
+                        </small>
+                      )}
+                    </span>
                     <span className="flex items-center gap-2">
                       <button
                         aria-label={`Remove one ${i.name}`}
