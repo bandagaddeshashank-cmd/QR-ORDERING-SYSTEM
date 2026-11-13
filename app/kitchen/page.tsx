@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import WaiterCalls from "./waitercalls";
 
 type Line = { name_snapshot: string; quantity: number; note: string | null };
 type Order = {
@@ -88,6 +89,7 @@ export default function Kitchen() {
         </p>
       </header>
 
+      <WaiterCalls />
       <div className="grid gap-6 lg:grid-cols-3">
         {COLUMNS.map((col) => {
           const list = orders.filter((o) => col.statuses.includes(o.status));

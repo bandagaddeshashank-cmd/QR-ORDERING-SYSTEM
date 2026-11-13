@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import CallWaiter from "./callwaiter";
 
 type Item = {
   id: string;
@@ -211,9 +212,12 @@ export default function TablePage() {
               className="h-20 w-auto"
             />
           </h1>
-          <span className="ml-3 shrink-0 text-sm font-semibold text-[#14511D]">
-            {info ? `Table ${info.table}` : ""}
-          </span>
+          <div className="ml-3 flex shrink-0 flex-col items-end gap-1">
+            <span className="text-sm font-semibold text-[#14511D]">
+              {info ? `Table ${info.table}` : ""}
+            </span>
+            <CallWaiter token={token} />
+          </div>
         </header>
 
         {notice && (
