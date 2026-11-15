@@ -144,9 +144,10 @@ export function OrderEditor({
             hasn&apos;t started it.
           </p>
         ) : (
-          <p className="mb-3 rounded bg-[#F2B01E]/30 p-2 text-sm font-medium">
-            The kitchen has started this order, or the change time is over. It
-            can&apos;t be changed now.
+          <p className="mb-3 text-sm text-[#1C2333]/70">
+            You can change or cancel this for{" "}
+            <b className="tabular-nums">{clock(left)}</b>. After that, the kitchen
+            starts cooking.
           </p>
         )}
 

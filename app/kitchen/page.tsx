@@ -9,13 +9,9 @@ type Order = {
   status: string;
   created_at: string;
   edited_at: string | null;
+  lock_seconds_left: number;
   order_items: Line[];
-  table_sessions: {
-    tables: {
-      label: string;
-      restaurants: { cancel_window_seconds: number } | null;
-    } | null;
-  } | null;
+  table_sessions: { tables: { label: string } | null } | null;
 };
 
 const COLUMNS = [
@@ -53,6 +49,7 @@ export default function Kitchen() {
   const [offline, setOffline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [fetchedAt, setFetchedAt] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -62,22 +59,19 @@ export default function Kitchen() {
   const minutesSince = (iso: string) =>
     Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
 
-  // Seconds the customer can still change this order (only while it is New)
-  const changeSecondsLeft = (o: Order) => {
-    if (o.status !== "placed") return 0;
-    const windowSec =
-      o.table_sessions?.tables?.restaurants?.cancel_window_seconds ?? 120;
-    return Math.max(
+  // Counts down from the server's figure, so this screen's clock doesn't matter
+  const lockLeft = (o: Order) =>
+    Math.max(
       0,
-      windowSec - Math.floor((now - new Date(o.created_at).getTime()) / 1000)
+      o.lock_seconds_left - Math.max(0, Math.floor((now - fetchedAt) / 1000))
     );
-  };
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/kitchen", { cache: "no-store" });
       if (!res.ok) throw new Error("bad response");
       setOrders(await res.json());
+      setFetchedAt(Date.now());
       setOffline(false);
     } catch {
       setOffline(true);
@@ -133,7 +127,7 @@ export default function Kitchen() {
                 {list.map((o) => {
                   const mins = minutesSince(o.created_at);
                   const late = mins >= 10 && col.title !== "Ready";
-                  const changeLeft = changeSecondsLeft(o);
+                  const locked = lockLeft(o);
                   return (
                     <li key={o.id} className={`border-l-8 bg-white p-4 ${col.color}`}>
                       <div className="flex items-baseline justify-between">
@@ -153,11 +147,9 @@ export default function Kitchen() {
                           Edited by customer
                         </p>
                       )}
-                      {changeLeft > 0 && (
-                        <p className="mt-1 text-sm text-[#1C2333]/70">
-                          Customer can still change this,{" "}
-                          <span className="tabular-nums">{clock(changeLeft)}</span>{" "}
-                          left
+                      {locked > 0 && (
+                        <p className="mt-1 text-sm font-medium text-[#1C2333]/70">
+                          Customer is still choosing, so this order can change
                         </p>
                       )}
                       <ul className="my-3 space-y-1 text-xl">
@@ -175,10 +167,10 @@ export default function Kitchen() {
                       </ul>
                       <button
                         onClick={() => advance(o.id, col.to)}
-                        disabled={busyId === o.id}
+                        disabled={busyId === o.id || locked > 0}
                         className="h-14 w-full rounded bg-[#1C2333] text-lg font-bold text-white disabled:opacity-50"
                       >
-                        {col.action}
+                        {locked > 0 ? `Locked ${clock(locked)}` : col.action}
                       </button>
                     </li>
                   );
