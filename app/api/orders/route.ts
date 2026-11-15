@@ -71,10 +71,15 @@ export async function GET(req: Request) {
 
   const { data: table } = await admin
     .from("tables")
-    .select("id, label, restaurants(name)")
+    .select("id, label, restaurants(name, cancel_window_seconds)")
     .eq("qr_token", token)
     .maybeSingle();
   if (!table) return fail("Unknown table", 404);
+
+  const restaurant = table.restaurants as unknown as
+    | { name: string; cancel_window_seconds: number }
+    | null;
+  const windowSec = restaurant?.cancel_window_seconds ?? 120;
 
   const { data: session } = await admin
     .from("table_sessions")
@@ -87,14 +92,25 @@ export async function GET(req: Request) {
   if (session) {
     const { data } = await admin
       .from("orders")
-      .select("id, status, created_at, order_items(name_snapshot, quantity)")
+      .select(
+        "id, status, created_at, edited_at, order_items(id, name_snapshot, quantity, note)"
+      )
       .eq("session_id", session.id)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false });
-    orders = data ?? [];
+    orders = (data ?? []).map((o) => ({
+      ...o,
+      edit_seconds_left:
+        o.status === "placed"
+          ? Math.max(
+              0,
+              windowSec -
+                Math.floor((Date.now() - new Date(o.created_at).getTime()) / 1000)
+            )
+          : 0,
+    }));
   }
 
-  const restaurant = table.restaurants as unknown as { name: string } | null;
   return NextResponse.json({
     table: table.label,
     restaurant: restaurant?.name ?? "",

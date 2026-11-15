@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import CallWaiter from "./callwaiter";
+import { ChangeButton, OrderEditor, type EditableOrder } from "./OrderChanger";
 
 type Item = {
   id: string;
@@ -12,11 +13,9 @@ type Item = {
   price: number;
   is_veg: boolean;
 };
-type OrderInfo = {
-  id: string;
+type OrderInfo = EditableOrder & {
   status: string;
   created_at: string;
-  order_items: { name_snapshot: string; quantity: number }[];
 };
 type TableInfo = { table: string; restaurant: string; orders: OrderInfo[] };
 
@@ -61,6 +60,8 @@ export default function TablePage() {
   const [token, setToken] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [info, setInfo] = useState<TableInfo | null>(null);
+  const [fetchedAt, setFetchedAt] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -84,7 +85,10 @@ export default function TablePage() {
       cache: "no-store",
     });
     if (res.status === 404) return setInvalid(true);
-    if (res.ok) setInfo(await res.json());
+    if (res.ok) {
+      setInfo(await res.json());
+      setFetchedAt(Date.now());
+    }
   }, []);
 
   useEffect(() => {
@@ -138,6 +142,7 @@ export default function TablePage() {
 
   const active = info?.orders.filter((o) => o.status !== "served") ?? [];
   const served = info?.orders.filter((o) => o.status === "served") ?? [];
+  const editingOrder = info?.orders.find((o) => o.id === editingId) ?? null;
 
   const placeOrder = async () => {
     if (placing || count === 0) return;
@@ -209,7 +214,7 @@ export default function TablePage() {
               alt={info?.restaurant || "Restaurant logo"}
               width={98}
               height={64}
-              className="h-20 w-auto"
+              className="h-16 w-auto"
             />
           </h1>
           <div className="ml-3 flex shrink-0 flex-col items-end gap-1">
@@ -236,11 +241,18 @@ export default function TablePage() {
               {active.map((o) => (
                 <li
                   key={o.id}
-                  className="flex items-center justify-between gap-3 text-sm"
+                  className="flex items-center justify-between gap-2 text-sm"
                 >
                   <span className="min-w-0 flex-1 truncate" title={summary(o)}>
                     {summary(o)}
                   </span>
+                  {o.status === "placed" && (
+                    <ChangeButton
+                      order={o}
+                      fetchedAt={fetchedAt}
+                      onOpen={() => setEditingId(o.id)}
+                    />
+                  )}
                   <span className={chip(o.status)}>
                     {STATUS_TEXT[o.status] ?? o.status}
                   </span>
@@ -475,6 +487,21 @@ export default function TablePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {editingOrder && token && (
+        <OrderEditor
+          key={editingOrder.id}
+          token={token}
+          order={editingOrder}
+          fetchedAt={fetchedAt}
+          onClose={() => setEditingId(null)}
+          onChanged={(message) => {
+            setEditingId(null);
+            showNotice(true, message);
+            loadInfo(token);
+          }}
+        />
       )}
     </div>
   );

@@ -8,8 +8,14 @@ type Order = {
   id: string;
   status: string;
   created_at: string;
+  edited_at: string | null;
   order_items: Line[];
-  table_sessions: { tables: { label: string } | null } | null;
+  table_sessions: {
+    tables: {
+      label: string;
+      restaurants: { cancel_window_seconds: number } | null;
+    } | null;
+  } | null;
 };
 
 const COLUMNS = [
@@ -39,13 +45,33 @@ const COLUMNS = [
   },
 ];
 
-const minutesSince = (iso: string) =>
-  Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+const clock = (s: number) =>
+  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export default function Kitchen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [offline, setOffline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const minutesSince = (iso: string) =>
+    Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+
+  // Seconds the customer can still change this order (only while it is New)
+  const changeSecondsLeft = (o: Order) => {
+    if (o.status !== "placed") return 0;
+    const windowSec =
+      o.table_sessions?.tables?.restaurants?.cancel_window_seconds ?? 120;
+    return Math.max(
+      0,
+      windowSec - Math.floor((now - new Date(o.created_at).getTime()) / 1000)
+    );
+  };
 
   const load = useCallback(async () => {
     try {
@@ -90,6 +116,7 @@ export default function Kitchen() {
       </header>
 
       <WaiterCalls />
+
       <div className="grid gap-6 lg:grid-cols-3">
         {COLUMNS.map((col) => {
           const list = orders.filter((o) => col.statuses.includes(o.status));
@@ -106,6 +133,7 @@ export default function Kitchen() {
                 {list.map((o) => {
                   const mins = minutesSince(o.created_at);
                   const late = mins >= 10 && col.title !== "Ready";
+                  const changeLeft = changeSecondsLeft(o);
                   return (
                     <li key={o.id} className={`border-l-8 bg-white p-4 ${col.color}`}>
                       <div className="flex items-baseline justify-between">
@@ -120,6 +148,18 @@ export default function Kitchen() {
                           {mins} min
                         </span>
                       </div>
+                      {o.edited_at && (
+                        <p className="mt-1 inline-block rounded bg-[#F2B01E] px-2 py-0.5 text-sm font-bold">
+                          Edited by customer
+                        </p>
+                      )}
+                      {changeLeft > 0 && (
+                        <p className="mt-1 text-sm text-[#1C2333]/70">
+                          Customer can still change this,{" "}
+                          <span className="tabular-nums">{clock(changeLeft)}</span>{" "}
+                          left
+                        </p>
+                      )}
                       <ul className="my-3 space-y-1 text-xl">
                         {o.order_items.map((i, idx) => (
                           <li key={idx}>

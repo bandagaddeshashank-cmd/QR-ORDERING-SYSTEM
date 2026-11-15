@@ -10,7 +10,7 @@ export async function GET() {
   const { data, error } = await admin
     .from("orders")
     .select(
-      "id, status, created_at, order_items(name_snapshot, quantity, note), table_sessions(tables(label))"
+      "id, status, created_at, edited_at, order_items(name_snapshot, quantity, note), table_sessions(tables(label, restaurants(cancel_window_seconds)))"
     )
     .in("status", ["placed", "accepted", "preparing", "ready"])
     .order("created_at");
