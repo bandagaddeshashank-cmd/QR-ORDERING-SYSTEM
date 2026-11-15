@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import ManagerGate from "./ManagerGate";
+import { authFetch } from "../../lib/authFetch";
 
 type Line = { name: string; price: number; qty: number; total: number };
 type Bill = {
@@ -31,7 +33,7 @@ const money = (n: number) =>
   "₹" +
   n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function Billing() {
+function BillingScreen() {
   const [table, setTable] = useState("");
   const [discount, setDiscount] = useState("0");
   const [method, setMethod] = useState("");
@@ -43,7 +45,7 @@ export default function Billing() {
   const load = async (disc: string) => {
     setError("");
     setClosed(false);
-    const res = await fetch(
+    const res = await authFetch(
       `/api/billing?table=${encodeURIComponent(table)}&discount=${encodeURIComponent(disc)}`,
       { cache: "no-store" }
     );
@@ -59,7 +61,7 @@ export default function Billing() {
     if (!bill || busy || !method) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/billing", {
+      const res = await authFetch("/api/billing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -261,5 +263,13 @@ export default function Billing() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function Billing() {
+  return (
+    <ManagerGate>
+      <BillingScreen />
+    </ManagerGate>
   );
 }

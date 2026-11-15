@@ -10,6 +10,13 @@ const round = (n: number) => Math.round(n * 100) / 100;
 const fail = (error: string, status: number) =>
   NextResponse.json({ error }, { status });
 
+async function requireManager(req: Request) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) return false;
+  const { data, error } = await admin.auth.getUser(token);
+  return !error && data.user?.app_metadata?.role === "manager";
+}
+
 type Rest = { name: string; tax_percent: number; service_charge_percent: number };
 
 async function buildBill(sessionId: string, discountInput: number) {
@@ -63,6 +70,9 @@ async function buildBill(sessionId: string, discountInput: number) {
 }
 
 export async function GET(req: Request) {
+  if (!(await requireManager(req)))
+    return fail("Please log in as manager", 401);
+
   const url = new URL(req.url);
   const label = url.searchParams.get("table")?.trim();
   const discount = Number(url.searchParams.get("discount") || 0);
@@ -84,7 +94,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { sessionId, discount, paymentMethod } = await req.json();
+  if (!(await requireManager(req)))
+    return fail("Please log in as manager", 401);
+
+  const { sessionId, discount, paymentMethod } = await req.json();
   if (!sessionId) return fail("Missing session", 400);
   if (!["cash", "upi", "card", "other"].includes(paymentMethod))
     return fail("Choose how the bill was paid", 400);
@@ -114,5 +127,5 @@ export async function POST(req: Request) {
     .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", sessionId);
 
-    return NextResponse.json({ ...bill, billNumber: saved.bill_number, paymentMethod });
+  return NextResponse.json({ ...bill, billNumber: saved.bill_number, paymentMethod });
 }
