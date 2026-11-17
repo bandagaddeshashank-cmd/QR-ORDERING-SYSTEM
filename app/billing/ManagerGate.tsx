@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
 import type { Session } from "@supabase/supabase-js";
-import { supabaseManager as supabase } from "../../lib/supabaseManager";
-
-const shell = "min-h-screen bg-[#F2F4F1] p-5 text-[#1C2333]";
+import { supabaseManager as supabase } from "@/lib/supabaseManager";
 
 export default function ManagerGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -19,9 +18,9 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
       setSession(data.session);
       setReady(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, s) =>
-      setSession(s)
-    );
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -30,82 +29,134 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
     if (busy) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({
+
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
-    if (error) setError("Wrong email or password.");
+
+    if (signInErr) {
+      setError("Incorrect manager email or password.");
+    }
     setBusy(false);
   };
 
-  if (!ready) return <div className={`${shell} text-center`}>Loading.</div>;
+  const shell = "min-h-screen bg-[#F8F5EF] p-6 text-[#252D38]";
 
-  if (!session)
+  if (!ready) {
     return (
-      <div className={shell}>
-        <main className="mx-auto max-w-sm pt-10">
-          <img
+      <div className={`${shell} flex items-center justify-center`}>
+        <div className="text-center">
+          <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-[#193A2D] border-t-transparent mb-3" />
+          <p className="text-sm font-semibold text-[#193A2D]">Loading Management Console...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className={`${shell} flex flex-col items-center justify-center`}>
+        <main className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl border border-[#252D38]/10 text-center">
+          <Image
             src="/logo.png"
-            alt="Restaurant logo"
-            className="mx-auto mb-6 h-20 w-auto"
+            alt="Restaurant Logo"
+            width={100}
+            height={60}
+            className="mx-auto mb-4 h-16 w-auto"
+            priority
           />
-          <h1 className="mb-4 text-2xl font-bold">Manager login</h1>
-          <form onSubmit={login} className="space-y-3">
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              className="h-12 w-full rounded-lg border-2 border-[#1C2333] bg-white px-3 text-lg"
-            />
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="h-12 w-full rounded-lg border-2 border-[#1C2333] bg-white px-3 text-lg"
-            />
-            {error && <p className="font-medium text-red-700">{error}</p>}
+          <h1 className="text-2xl font-black text-[#193A2D]">Manager Console</h1>
+          <p className="text-xs text-[#252D38]/70 mt-1 mb-6">
+            Authorized management credentials required for billing & settlement
+          </p>
+
+          <form onSubmit={login} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
+                Manager Email
+              </label>
+              <input
+                type="email"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="manager@restaurant.com"
+                className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-medium focus:border-[#193A2D] focus:bg-white focus:outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-medium focus:border-[#193A2D] focus:bg-white focus:outline-none transition-all"
+              />
+            </div>
+
+            {error && (
+              <p className="rounded-lg bg-red-50 p-2.5 text-xs font-bold text-red-700 border border-red-200">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
               disabled={busy}
-              className="h-12 w-full rounded-lg bg-[#1C2333] font-bold text-white disabled:opacity-50"
+              className="h-12 w-full rounded-xl bg-[#193A2D] font-bold text-sm text-[#E7B94F] shadow-md hover:bg-[#122b21] disabled:opacity-50 transition-all mt-2"
             >
-              {busy ? "Logging in" : "Log in"}
+              {busy ? "Authenticating..." : "Access Management Console"}
             </button>
           </form>
         </main>
       </div>
     );
+  }
 
-  if (session.user.app_metadata?.role !== "manager")
+  if (session.user.app_metadata?.role !== "manager") {
     return (
-      <div className={shell}>
-        <main className="mx-auto max-w-sm pt-10">
-          <p className="mb-4">This account isn&apos;t set up as a manager.</p>
+      <div className={`${shell} flex items-center justify-center`}>
+        <main className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl border border-red-200 text-center">
+          <h2 className="text-xl font-bold text-red-700 mb-2">Manager Role Required</h2>
+          <p className="text-sm text-[#252D38]/70 mb-6">
+            The logged in account ({session.user.email}) does not have manager authorization.
+          </p>
           <button
             onClick={() => supabase.auth.signOut({ scope: "local" })}
-            className="h-12 w-full rounded-lg border-2 border-[#1C2333] font-bold"
+            className="h-11 w-full rounded-xl border-2 border-[#193A2D] font-bold text-sm text-[#193A2D] hover:bg-[#193A2D]/10"
           >
-            Log out
+            Log Out
           </button>
         </main>
       </div>
     );
+  }
 
   return (
     <>
-      <div className="sticky top-0 z-30 flex items-center justify-between bg-[#1C2333] px-5 py-2 text-sm text-white print:hidden">
-        <span className="truncate">Manager: {session.user.email}</span>
+      <div className="sticky top-0 z-40 flex items-center justify-between bg-[#193A2D] px-5 py-2.5 text-xs text-[#F8F5EF] shadow-md print:hidden">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-2 w-2 rounded-full bg-[#E7B94F] animate-pulse" />
+          <span className="font-bold tracking-wide uppercase text-[#E7B94F]">
+            Manager Portal
+          </span>
+          <span className="hidden sm:inline text-white/60">|</span>
+          <span className="hidden sm:inline text-white/80">{session.user.email}</span>
+        </div>
+
         <button
           onClick={() => supabase.auth.signOut({ scope: "local" })}
-          className="ml-3 shrink-0 rounded border border-white/60 px-3 py-1 font-semibold"
+          className="rounded-lg border border-white/20 bg-white/10 px-3 py-1 font-semibold hover:bg-white/20 transition-all text-[11px]"
         >
-          Log out
+          Sign Out
         </button>
       </div>
       {children}

@@ -1,67 +1,124 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { supabaseAdmin, requireStaff, apiError, apiSuccess } from "@/lib/serverAuth";
+import { resolveTableFromToken } from "@/lib/dbHelpers";
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const fail = (error: string, status: number) =>
-  NextResponse.json({ error }, { status });
-
-async function tableFromToken(token: string) {
-  const { data } = await admin
-    .from("tables")
-    .select("id")
-    .eq("qr_token", token)
-    .maybeSingle();
-  return data;
-}
-
-// With ?t=token: is this table's call open? Without it: list all open calls.
 export async function GET(req: Request) {
-  const token = new URL(req.url).searchParams.get("t");
+  try {
+    const token = new URL(req.url).searchParams.get("t");
 
-  if (token) {
-    const table = await tableFromToken(token);
-    if (!table) return fail("Unknown table", 404);
-    const { data } = await admin
+    // Customer query: check if current table has an active waiter call
+    if (token) {
+      const resolution = await resolveTableFromToken(token);
+      if (!resolution) return apiError("Unknown table", 404);
+
+      const { data, error } = await supabaseAdmin
+        .from("waiter_calls")
+        .select("id")
+        .eq("table_id", resolution.table.id)
+        .eq("status", "open")
+        .maybeSingle();
+
+      if (error) {
+        console.error("[GET /api/waiter?t=] DB error:", error);
+      }
+      return apiSuccess({ called: !!data });
+    }
+
+    // Staff query: requires staff authentication
+    const { staff, errorResponse } = await requireStaff(req);
+    if (errorResponse) return errorResponse;
+
+    let query = supabaseAdmin
       .from("waiter_calls")
-      .select("id")
-      .eq("table_id", table.id)
+      .select("id, created_at, tables!inner(id, label, restaurant_id)")
       .eq("status", "open")
-      .maybeSingle();
-    return NextResponse.json({ called: !!data });
-  }
+      .order("created_at", { ascending: true });
 
-  const { data, error } = await admin
-    .from("waiter_calls")
-    .select("id, created_at, tables(label)")
-    .eq("status", "open")
-    .order("created_at");
-  if (error) return fail(error.message, 500);
-  return NextResponse.json(data);
+    if (staff?.restaurantId) {
+      query = query.eq("tables.restaurant_id", staff.restaurantId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("[GET /api/waiter] Query error:", error);
+      return apiError("Failed to fetch waiter calls.", 500);
+    }
+
+    return apiSuccess(data ?? []);
+  } catch (err) {
+    console.error("[GET /api/waiter] Unhandled error:", err);
+    return apiError("An unexpected server error occurred.", 500);
+  }
 }
 
 export async function POST(req: Request) {
-  const { token } = await req.json();
-  if (!token) return fail("Missing table", 400);
-  const table = await tableFromToken(token);
-  if (!table) return fail("Unknown table", 404);
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body?.token) return apiError("Missing table QR token.", 400);
 
-  // The database allows one open call per table, so repeat taps are harmless
-  const { error } = await admin.from("waiter_calls").insert({ table_id: table.id });
-  if (error && error.code !== "23505") return fail("Could not call the waiter", 500);
-  return NextResponse.json({ ok: true });
+    const resolution = await resolveTableFromToken(body.token);
+    if (!resolution) return apiError("Unknown table.", 404);
+
+    // Database unique index on (table_id) where status = 'open' prevents duplicates
+    const { error } = await supabaseAdmin
+      .from("waiter_calls")
+      .insert({ table_id: resolution.table.id, status: "open" });
+
+    if (error && error.code !== "23505") {
+      console.error("[POST /api/waiter] Insert error:", error);
+      return apiError("Could not alert waiter. Please try again.", 500);
+    }
+
+    return apiSuccess({ success: true, called: true });
+  } catch (err) {
+    console.error("[POST /api/waiter] Unhandled error:", err);
+    return apiError("An unexpected server error occurred.", 500);
+  }
 }
 
 export async function PATCH(req: Request) {
-  const { callId } = await req.json();
-  if (!callId) return fail("Missing call", 400);
-  const { error } = await admin
-    .from("waiter_calls")
-    .update({ status: "done", done_at: new Date().toISOString() })
-    .eq("id", callId);
-  if (error) return fail(error.message, 500);
-  return NextResponse.json({ ok: true });
+  try {
+    const { staff, errorResponse } = await requireStaff(req);
+    if (errorResponse) return errorResponse;
+
+    const body = await req.json().catch(() => null);
+    if (!body?.callId) return apiError("Missing waiter call identifier.", 400);
+
+    // Verify call and check restaurant ownership
+    const { data: call, error: findError } = await supabaseAdmin
+      .from("waiter_calls")
+      .select("id, tables(restaurant_id)")
+      .eq("id", body.callId)
+      .maybeSingle();
+
+    if (findError || !call) {
+      return apiError("Waiter call not found.", 404);
+    }
+
+    const callTable = call.tables as unknown as { restaurant_id: string } | null;
+    if (
+      staff?.restaurantId &&
+      callTable?.restaurant_id &&
+      staff.restaurantId !== callTable.restaurant_id
+    ) {
+      return apiError("Forbidden: Waiter call belongs to another restaurant.", 403);
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("waiter_calls")
+      .update({
+        status: "done",
+        done_at: new Date().toISOString(),
+      })
+      .eq("id", body.callId);
+
+    if (updateError) {
+      console.error("[PATCH /api/waiter] Update error:", updateError);
+      return apiError("Failed to update waiter call status.", 500);
+    }
+
+    return apiSuccess({ success: true });
+  } catch (err) {
+    console.error("[PATCH /api/waiter] Unhandled error:", err);
+    return apiError("An unexpected server error occurred.", 500);
+  }
 }

@@ -1,119 +1,167 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
-
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const fail = (error: string, status: number) =>
-  NextResponse.json({ error }, { status });
+import { supabaseAdmin, apiError, apiSuccess } from "@/lib/serverAuth";
+import {
+  resolveTableFromToken,
+  getOrCreateOpenSession,
+  validateOrderItems,
+} from "@/lib/dbHelpers";
 
 export async function POST(req: Request) {
-  const { token, items } = await req.json();
-  if (!token || !Array.isArray(items) || items.length === 0)
-    return fail("Invalid order", 400);
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body || !body.token || !Array.isArray(body.items) || body.items.length === 0) {
+      return apiError("Invalid order request. Please provide items and table token.", 400);
+    }
 
-  const { data: table } = await admin
-    .from("tables").select("id").eq("qr_token", token).maybeSingle();
-  if (!table) return fail("Unknown table", 404);
+    const resolution = await resolveTableFromToken(body.token);
+    if (!resolution) {
+      return apiError("Unknown or inactive table. Please rescan the QR code.", 404);
+    }
+    const { table, restaurant } = resolution;
 
-  // Find this table's open session, or open a new one
-  const findSession = () =>
-    admin.from("table_sessions").select("id")
-      .eq("table_id", table.id).eq("status", "open").maybeSingle();
+    // Resolve or open session atomically
+    const sessionId = await getOrCreateOpenSession(table.id);
+    if (!sessionId) {
+      return apiError("Could not initialize dining session for this table.", 500);
+    }
 
-  let { data: session } = await findSession();
-  if (!session) {
-    const created = await admin.from("table_sessions")
-      .insert({ table_id: table.id }).select("id").single();
-    session = created.data ?? (await findSession()).data;
+    // Validate items strictly against restaurant menu & prices
+    const { validItems, error: validationError } = await validateOrderItems(
+      restaurant.id,
+      body.items
+    );
+    if (validationError || !validItems) {
+      return apiError(validationError ?? "Invalid items submitted.", 400);
+    }
+
+    // Insert order header
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from("orders")
+      .insert({ session_id: sessionId, status: "placed" })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      console.error("[POST /api/orders] Order insert failed:", orderError);
+      return apiError("Could not place order. Please try again.", 500);
+    }
+
+    // Insert order items
+    const rows = validItems.map((r) => ({
+      order_id: order.id,
+      ...r,
+      status: "active",
+    }));
+
+    const { error: itemsError } = await supabaseAdmin
+      .from("order_items")
+      .insert(rows);
+
+    // Partial failure rollback: remove orphaned order header if items failed
+    if (itemsError) {
+      console.error("[POST /api/orders] Order items insert failed:", itemsError);
+      await supabaseAdmin.from("orders").delete().eq("id", order.id);
+      return apiError("Failed to save order items. Please try again.", 500);
+    }
+
+    return apiSuccess({ success: true, orderId: order.id });
+  } catch (err) {
+    console.error("[POST /api/orders] Unhandled error:", err);
+    return apiError("An unexpected server error occurred.", 500);
   }
-  if (!session) return fail("Could not open table session", 500);
-
-  // Prices come from the database, never from the browser
-  const ids = items.map((i: { id: string }) => i.id);
-  const { data: menu } = await admin
-    .from("menu_items").select("id, name, price")
-    .in("id", ids).eq("is_active", true);
-
-  const rows = [];
-  for (const line of items) {
-    const m = menu?.find((x) => x.id === line.id);
-    const qty = Number(line.quantity);
-    if (!m || !Number.isInteger(qty) || qty < 1 || qty > 20)
-      return fail("Invalid item", 400);
-        const note =
-      typeof line.note === "string" ? line.note.trim().slice(0, 150) : "";
-    rows.push({
-      menu_item_id: m.id,
-      name_snapshot: m.name,
-      price_snapshot: m.price,
-      quantity: qty,
-      note: note || null,
-    });
-  }
-
-  const { data: order } = await admin
-    .from("orders").insert({ session_id: session.id }).select("id").single();
-  if (!order) return fail("Could not save order", 500);
-
-  const { error } = await admin
-    .from("order_items").insert(rows.map((r) => ({ order_id: order.id, ...r })));
-  if (error) return fail("Could not save items", 500);
-
-  return NextResponse.json({ orderId: order.id });
 }
 
 export async function GET(req: Request) {
-  const token = new URL(req.url).searchParams.get("t");
-  if (!token) return fail("Missing table", 400);
+  try {
+    const url = new URL(req.url);
+    const token = url.searchParams.get("t");
+    const isPoll = url.searchParams.get("poll") === "1";
+    if (!token) return apiError("Missing table QR token", 400);
 
-  const { data: table } = await admin
-    .from("tables")
-    .select("id, label, restaurants(name, cancel_window_seconds)")
-    .eq("qr_token", token)
-    .maybeSingle();
-  if (!table) return fail("Unknown table", 404);
+    const resolution = await resolveTableFromToken(token);
+    if (!resolution) {
+      return apiError("Unknown or inactive table.", 404);
+    }
+    const { table, restaurant } = resolution;
+    const windowSec = restaurant.cancel_window_seconds ?? 120;
 
-  const restaurant = table.restaurants as unknown as
-    | { name: string; cancel_window_seconds: number }
-    | null;
-  const windowSec = restaurant?.cancel_window_seconds ?? 120;
+    // Check open session and active waiter call in parallel
+    const [sessionRes, waiterCallRes] = await Promise.all([
+      supabaseAdmin
+        .from("table_sessions")
+        .select("id")
+        .eq("table_id", table.id)
+        .eq("status", "open")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("waiter_calls")
+        .select("id")
+        .eq("table_id", table.id)
+        .eq("status", "open")
+        .maybeSingle(),
+    ]);
 
-  const { data: session } = await admin
-    .from("table_sessions")
-    .select("id")
-    .eq("table_id", table.id)
-    .eq("status", "open")
-    .maybeSingle();
+    const session = sessionRes.data;
+    const waiterCalled = Boolean(waiterCallRes.data);
 
-  let orders: unknown[] = [];
-  if (session) {
-    const { data } = await admin
-      .from("orders")
-      .select(
-        "id, status, created_at, edited_at, order_items(id, name_snapshot, quantity, note)"
-      )
-      .eq("session_id", session.id)
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: false });
-    orders = (data ?? []).map((o) => ({
-      ...o,
-      edit_seconds_left:
-        o.status === "placed"
-          ? Math.max(
-              0,
-              windowSec -
-                Math.floor((Date.now() - new Date(o.created_at).getTime()) / 1000)
-            )
-          : 0,
-    }));
+    let orders: unknown[] = [];
+    if (session) {
+      const { data, error } = await supabaseAdmin
+        .from("orders")
+        .select(
+          "id, status, created_at, edited_at, order_items(id, name_snapshot, price_snapshot, quantity, note, status)"
+        )
+        .eq("session_id", session.id)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        orders = data.map((o) => {
+          const elapsedSec = Math.floor(
+            (Date.now() - new Date(o.created_at).getTime()) / 1000
+          );
+          return {
+            ...o,
+            edit_seconds_left:
+              o.status === "placed" ? Math.max(0, windowSec - elapsedSec) : 0,
+          };
+        });
+      }
+    }
+
+    // Lightweight delta for 4-second polling: return orders & waiter status without re-fetching 50 menu items
+    if (isPoll) {
+      return apiSuccess({
+        table: table.label,
+        orders,
+        waiterCalled,
+        sessionOpen: Boolean(session),
+      });
+    }
+
+    // Fetch active menu items strictly for this restaurant on full load
+    const { data: menuItems } = await supabaseAdmin
+      .from("menu_items")
+      .select("id, name, description, category, price, is_veg")
+      .eq("restaurant_id", restaurant.id)
+      .eq("is_active", true)
+      .order("sort_order")
+      .order("name");
+
+    return apiSuccess({
+      table: table.label,
+      restaurant: {
+        id: restaurant.id,
+        name: restaurant.name,
+        cancel_window_seconds: windowSec,
+        tax_percent: restaurant.tax_percent,
+        service_charge_percent: restaurant.service_charge_percent,
+      },
+      menu: menuItems ?? [],
+      orders,
+      waiterCalled,
+    });
+  } catch (err) {
+    console.error("[GET /api/orders] Unhandled error:", err);
+    return apiError("An unexpected server error occurred.", 500);
   }
-
-  return NextResponse.json({
-    table: table.label,
-    restaurant: restaurant?.name ?? "",
-    orders,
-  });
 }

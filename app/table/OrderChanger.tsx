@@ -16,7 +16,7 @@ export type EditableOrder = {
 const clock = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-// Counts down from the server's figure, so the phone's own clock doesn't matter
+// Counts down from the server's figure
 function useSecondsLeft(order: EditableOrder, fetchedAt: number) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -38,12 +38,14 @@ export function ChangeButton({
 }) {
   const left = useSecondsLeft(order, fetchedAt);
   if (left <= 0) return null;
+
   return (
     <button
       onClick={onOpen}
-      className="shrink-0 rounded-full border-2 border-[#14511D] px-3 py-0.5 text-xs font-semibold tabular-nums text-[#14511D]"
+      className="inline-flex items-center gap-1.5 shrink-0 rounded-full border border-[#193A2D] bg-[#193A2D]/10 px-3 py-1 text-xs font-semibold tabular-nums text-[#193A2D] hover:bg-[#193A2D]/20 active:scale-95 transition-all"
     >
-      Change · {clock(left)}
+      <span className="h-1.5 w-1.5 rounded-full bg-[#E7B94F] animate-ping" />
+      Edit · {clock(left)}
     </button>
   );
 }
@@ -69,7 +71,7 @@ export function OrderEditor({
     Object.fromEntries(order.order_items.map((i) => [i.id, i.note ?? ""]))
   );
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [error, setError] = useState("");
 
   const open = left > 0;
@@ -81,7 +83,7 @@ export function OrderEditor({
   const allRemoved = order.order_items.every((i) => (qty[i.id] ?? 0) === 0);
 
   const step = (id: string, diff: number) => {
-    setConfirming(false);
+    setConfirmingCancel(false);
     setQty((q) => ({
       ...q,
       [id]: Math.max(0, Math.min(20, (q[id] ?? 0) + diff)),
@@ -114,9 +116,11 @@ export function OrderEditor({
       }
       onChanged(
         action === "cancel" || data.cancelled
-          ? "Order cancelled."
-          : "Order updated. The kitchen can see the change."
+          ? "Order cancelled successfully."
+          : "Order updated. Kitchen is notified."
       );
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -124,65 +128,68 @@ export function OrderEditor({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Change your order"
+      aria-label="Modify your placed order"
     >
-      <div className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 text-[#1C2333]">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-xl font-bold">Change your order</h2>
-          <button onClick={onClose} aria-label="Close" className="h-9 w-9 text-2xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-[#F8F5EF] p-6 text-[#252D38] shadow-2xl">
+        <div className="mb-4 flex items-center justify-between border-b border-[#252D38]/10 pb-3">
+          <div>
+            <h2 className="text-xl font-bold text-[#193A2D]">Modify Order</h2>
+            <p className="text-xs text-[#252D38]/70 mt-0.5">
+              {open ? (
+                <span>
+                  Change window active: <b className="text-[#193A2D] tabular-nums font-semibold">{clock(left)}</b> remaining
+                </span>
+              ) : (
+                <span className="text-red-700 font-semibold">Change window expired</span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#252D38]/5 text-2xl text-[#252D38]/70 hover:bg-[#252D38]/10"
+          >
             ×
           </button>
         </div>
 
-        {open ? (
-          <p className="mb-3 text-sm text-[#1C2333]/70">
-            You can change this for{" "}
-            <b className="tabular-nums">{clock(left)}</b>, as long as the kitchen
-            hasn&apos;t started it.
-          </p>
-        ) : (
-          <p className="mb-3 text-sm text-[#1C2333]/70">
-            You can change or cancel this for{" "}
-            <b className="tabular-nums">{clock(left)}</b>. After that, the kitchen
-            starts cooking.
-          </p>
-        )}
-
-        <ul className="divide-y divide-[#1C2333]/15">
+        <ul className="divide-y divide-[#252D38]/10 mb-4">
           {order.order_items.map((i) => {
             const q = qty[i.id] ?? 0;
             return (
-              <li key={i.id} className="py-3">
+              <li key={i.id} className="py-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span
-                    className={`min-w-0 flex-1 font-semibold ${
-                      q === 0 ? "text-[#1C2333]/40 line-through" : ""
+                    className={`min-w-0 flex-1 font-semibold text-sm ${
+                      q === 0 ? "text-[#252D38]/40 line-through" : "text-[#252D38]"
                     }`}
                   >
                     {i.name_snapshot}
                   </span>
-                  <span className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-lg border border-[#252D38]/20 bg-white p-1">
                     <button
                       disabled={!open}
-                      aria-label={`Remove one ${i.name_snapshot}`}
+                      aria-label={`Reduce ${i.name_snapshot}`}
                       onClick={() => step(i.id, -1)}
-                      className="h-9 w-9 rounded border border-[#1C2333]/40 disabled:opacity-40"
+                      className="h-8 w-8 rounded text-lg font-bold text-[#193A2D] hover:bg-[#193A2D]/10 disabled:opacity-40"
                     >
                       −
                     </button>
-                    <span className="w-6 text-center tabular-nums">{q}</span>
+                    <span className="w-6 text-center font-bold tabular-nums text-sm">
+                      {q}
+                    </span>
                     <button
                       disabled={!open}
-                      aria-label={`Add one ${i.name_snapshot}`}
+                      aria-label={`Add ${i.name_snapshot}`}
                       onClick={() => step(i.id, 1)}
-                      className="h-9 w-9 rounded border border-[#1C2333]/40 disabled:opacity-40"
+                      className="h-8 w-8 rounded text-lg font-bold text-[#193A2D] hover:bg-[#193A2D]/10 disabled:opacity-40"
                     >
                       +
                     </button>
-                  </span>
+                  </div>
                 </div>
                 {q > 0 && (
                   <input
@@ -193,9 +200,9 @@ export function OrderEditor({
                     onChange={(e) =>
                       setNotes((n) => ({ ...n, [i.id]: e.target.value }))
                     }
-                    placeholder="Note for kitchen"
+                    placeholder="Preparation note for kitchen"
                     aria-label={`Note for ${i.name_snapshot}`}
-                    className="mt-2 h-10 w-full rounded-lg border-2 border-[#1C2333]/30 bg-white px-3 text-base disabled:opacity-50"
+                    className="mt-2.5 h-10 w-full rounded-lg border border-[#252D38]/20 bg-white px-3 text-sm focus:border-[#193A2D] focus:outline-none"
                   />
                 )}
               </li>
@@ -203,34 +210,44 @@ export function OrderEditor({
           })}
         </ul>
 
-        {error && <p className="mt-3 font-medium text-red-700">{error}</p>}
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2.5">
           <button
             onClick={() => send("edit")}
             disabled={!open || busy || !changed}
-            className="h-12 w-full rounded-lg bg-[#1C2333] font-bold text-white disabled:opacity-40"
+            className="h-12 w-full rounded-xl bg-[#193A2D] font-bold text-[#F8F5EF] shadow-md hover:bg-[#122b21] disabled:opacity-40 transition-all"
           >
             {busy
-              ? "Saving"
+              ? "Updating..."
               : allRemoved
-              ? "Remove all and cancel order"
-              : "Save changes"}
+              ? "Remove All & Cancel Order"
+              : "Confirm Changes"}
           </button>
+
           <button
-            onClick={() => (confirming ? send("cancel") : setConfirming(true))}
+            onClick={() =>
+              confirmingCancel ? send("cancel") : setConfirmingCancel(true)
+            }
             disabled={!open || busy}
-            className="h-12 w-full rounded-lg border-2 border-red-700 font-bold text-red-700 disabled:opacity-40"
+            className="h-12 w-full rounded-xl border-2 border-red-700 font-bold text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
           >
-            {confirming ? "Yes, cancel the whole order" : "Cancel whole order"}
+            {confirmingCancel
+              ? "Confirm: Yes, Cancel Order"
+              : "Cancel Entire Order"}
           </button>
-          <button onClick={onClose} className="h-12 w-full rounded-lg font-semibold">
-            Keep order as it is
+
+          <button
+            onClick={onClose}
+            className="h-11 w-full rounded-xl font-semibold text-[#252D38]/70 hover:text-[#252D38]"
+          >
+            Keep Order Unchanged
           </button>
         </div>
-        <p className="mt-3 text-xs text-[#1C2333]/60">
-          To add or swap a dish, close this and order it as a new order.
-        </p>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import CallWaiter from "./callwaiter";
 import { ChangeButton, OrderEditor, type EditableOrder } from "./OrderChanger";
 
@@ -13,64 +14,125 @@ type Item = {
   price: number;
   is_veg: boolean;
 };
+
 type OrderInfo = EditableOrder & {
   status: string;
   created_at: string;
 };
-type TableInfo = { table: string; restaurant: string; orders: OrderInfo[] };
 
-const STATUS_TEXT: Record<string, string> = {
-  placed: "Sent to kitchen",
-  accepted: "Sent to kitchen",
-  preparing: "Being prepared",
-  ready: "Ready, on its way",
-  served: "Served",
+type TableResponse = {
+  table: string;
+  restaurant: {
+    id: string;
+    name: string;
+    cancel_window_seconds: number;
+    tax_percent: number;
+    service_charge_percent: number;
+  };
+  menu: Item[];
+  orders: OrderInfo[];
+  waiterCalled?: boolean;
 };
 
-const chip = (status: string) =>
-  `shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-    status === "ready"
-      ? "bg-green-700 text-white"
-      : status === "served"
-      ? "bg-[#1C2333]/10"
-      : "bg-[#F2B01E]"
-  }`;
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; badgeClass: string; step: number }
+> = {
+  placed: {
+    label: "Sent to Kitchen",
+    badgeClass: "bg-amber-100 text-amber-900 border-amber-300",
+    step: 1,
+  },
+  accepted: {
+    label: "Order Accepted",
+    badgeClass: "bg-amber-100 text-amber-900 border-amber-300",
+    step: 1,
+  },
+  preparing: {
+    label: "Being Prepared",
+    badgeClass: "bg-orange-100 text-orange-900 border-orange-300",
+    step: 2,
+  },
+  ready: {
+    label: "Ready & On Way",
+    badgeClass: "bg-emerald-600 text-white border-emerald-700 font-bold",
+    step: 3,
+  },
+  served: {
+    label: "Served",
+    badgeClass: "bg-stone-200 text-stone-700 border-stone-300",
+    step: 4,
+  },
+};
 
-const summary = (o: OrderInfo) =>
-  o.order_items.map((i) => `${i.quantity} × ${i.name_snapshot}`).join(", ");
-
-const needsChoice = (i: Item) => i.description?.startsWith("Choice of") ?? false;
-
-function VegMark({ veg }: { veg: boolean }) {
+function VegBadge({ veg }: { veg: boolean }) {
   return (
     <span
-      aria-label={veg ? "Vegetarian" : "Non-vegetarian"}
-      className={`mt-1 inline-flex h-4 w-4 shrink-0 items-center justify-center border-2 ${
-        veg ? "border-green-700" : "border-red-700"
+      title={veg ? "Vegetarian" : "Non-Vegetarian"}
+      aria-label={veg ? "Vegetarian" : "Non-Vegetarian"}
+      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border ${
+        veg ? "border-emerald-700" : "border-rose-700"
       }`}
     >
       <span
-        className={`h-2 w-2 rounded-full ${veg ? "bg-green-700" : "bg-red-700"}`}
+        className={`h-2 w-2 rounded-full ${
+          veg ? "bg-emerald-700" : "bg-rose-700"
+        }`}
       />
     </span>
   );
 }
 
-export default function TablePage() {
-  const [token, setToken] = useState<string | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
-  const [info, setInfo] = useState<TableInfo | null>(null);
-  const [fetchedAt, setFetchedAt] = useState(0);
+function TableLoadingScreen() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8F5EF] p-6 text-center text-[#252D38]">
+      <div className="rounded-2xl bg-white p-8 shadow-sm border border-[#252D38]/10 max-w-sm text-center">
+        <Image
+          src="/logo.png"
+          alt="Green Embassy Logo"
+          width={90}
+          height={54}
+          className="mx-auto mb-4 h-14 w-auto rounded object-contain"
+          priority
+        />
+        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#193A2D] border-t-transparent mb-2" />
+        <p className="text-xs font-semibold text-[#193A2D]">Loading Menu...</p>
+      </div>
+    </div>
+  );
+}
+
+// React 19 / Next.js 16 compliant hydration hook without cascading renders
+function useIsMounted() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
+function TableContent() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("t") ?? "";
+
+  const mounted = useIsMounted();
+  const [data, setData] = useState<TableResponse | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<number>(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
+
+  // Cart & notes state
   const [cart, setCart] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewing, setReviewing] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("");
+
   const chipsRef = useRef<HTMLElement>(null);
-  const stickyRef = useRef<HTMLDivElement>(null);
-  const [stickyH, setStickyH] = useState(176);
+  const inFlightRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
     null
   );
@@ -80,84 +142,150 @@ export default function TablePage() {
     setTimeout(() => setNotice(null), 5000);
   };
 
-  const loadInfo = useCallback(async (t: string) => {
-    const res = await fetch(`/api/orders?t=${encodeURIComponent(t)}`, {
-      cache: "no-store",
-    });
-    if (res.status === 404) return setInvalid(true);
-    if (res.ok) {
-      setInfo(await res.json());
-      setFetchedAt(Date.now());
-    }
-  }, []);
-
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("t") ?? "";
-    setToken(t);
-    if (!t) return;
-    supabase
-      .from("menu_items")
-      .select("id, name, description, category, price, is_veg")
-      .order("sort_order")
-      .order("name")
-      .then(({ data }) => setItems(data ?? []));
-    loadInfo(t);
-    const timer = setInterval(() => loadInfo(t), 5000);
-    return () => clearInterval(timer);
-  }, [loadInfo]);
-
-  // Keep category scrolling accurate as the pinned area grows or shrinks
-  useEffect(() => {
-    const el = stickyRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setStickyH(el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [invalid]);
-
+  const loading = !data && !invalid;
+  const items = useMemo(() => data?.menu ?? [], [data?.menu]);
   const q = query.trim().toLowerCase();
 
   const categories = useMemo(() => {
     const map = new Map<string, Item[]>();
-    for (const i of items) {
-      if (q && !`${i.name} ${i.description ?? ""}`.toLowerCase().includes(q))
+    for (const item of items) {
+      if (
+        q &&
+        !`${item.name} ${item.description ?? ""}`.toLowerCase().includes(q)
+      ) {
         continue;
-      map.set(i.category, [...(map.get(i.category) ?? []), i]);
+      }
+      const existing = map.get(item.category) ?? [];
+      existing.push(item);
+      map.set(item.category, existing);
     }
-    return [...map.entries()];
+    return Array.from(map.entries());
   }, [items, q]);
 
-  const change = (id: string, diff: number) =>
-    setCart((c) => {
-      const next = Math.max(0, Math.min(20, (c[id] ?? 0) + diff));
-      const copy = { ...c };
-      if (next === 0) delete copy[id];
-      else copy[id] = next;
-      return copy;
-    });
+  // Robust data fetcher with inFlight guard and AbortController
+  const fetchTableData = useCallback(
+    async (isPoll = false) => {
+      if (!token || inFlightRef.current) return;
+      inFlightRef.current = true;
 
-  const cartLines = items.filter((i) => cart[i.id]);
-  const count = cartLines.reduce((s, i) => s + cart[i.id], 0);
-  const total = cartLines.reduce((s, i) => s + cart[i.id] * i.price, 0);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
-  const active = info?.orders.filter((o) => o.status !== "served") ?? [];
-  const served = info?.orders.filter((o) => o.status === "served") ?? [];
-  const editingOrder = info?.orders.find((o) => o.id === editingId) ?? null;
+      try {
+        const url =
+          isPoll && data
+            ? `/api/orders?t=${encodeURIComponent(token)}&poll=1`
+            : `/api/orders?t=${encodeURIComponent(token)}`;
 
-  const placeOrder = async () => {
-    if (placing || count === 0) return;
+        const res = await fetch(url, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
 
-    const missing = cartLines.find(
-      (i) => needsChoice(i) && !(notes[i.id] ?? "").trim()
-    );
-    if (missing) {
-      setReviewing(false);
-      showNotice(false, `Please write your choice for ${missing.name}`);
-      document
-        .getElementById(`item-${missing.id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (res.status === 404) {
+          setInvalid(true);
+          return;
+        }
+
+        if (res.ok) {
+          const json = await res.json();
+          setData((prev) => {
+            if (isPoll && prev) {
+              return {
+                ...prev,
+                orders: json.orders ?? prev.orders,
+                table: json.table ?? prev.table,
+                waiterCalled:
+                  json.waiterCalled !== undefined
+                    ? json.waiterCalled
+                    : prev.waiterCalled,
+              };
+            }
+            return json;
+          });
+          setFetchedAt(Date.now());
+          setInvalid(false);
+        } else {
+          console.warn(`[TablePage] Server responded with HTTP ${res.status}`);
+        }
+      } catch (err: unknown) {
+        // Silently skip if request was intentionally aborted on unmount
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        console.warn("Table data poll deferred (retry on next cycle):", err);
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    [token, data]
+  );
+
+  // Polling using sequential timeout: runs 4s AFTER previous fetch finishes (never overlaps)
+  useEffect(() => {
+    if (!token || !mounted) {
       return;
     }
+
+    let active = true;
+    let timerId: ReturnType<typeof setTimeout>;
+
+    const pollLoop = async () => {
+      if (!active) return;
+      await fetchTableData(Boolean(data));
+      if (active) {
+        timerId = setTimeout(pollLoop, 4000);
+      }
+    };
+
+    pollLoop();
+
+    return () => {
+      active = false;
+      clearTimeout(timerId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [token, mounted, fetchTableData, data]);
+
+  // Active category: use explicit choice or fallback to first available
+  const currentCategory = activeCategory || categories[0]?.[0] || "";
+
+  const changeQty = (id: string, delta: number) => {
+    setCart((prev) => {
+      const next = Math.max(0, Math.min(20, (prev[id] ?? 0) + delta));
+      const updated = { ...prev };
+      if (next === 0) {
+        delete updated[id];
+      } else {
+        updated[id] = next;
+      }
+      return updated;
+    });
+  };
+
+  const cartLines = items.filter((i) => cart[i.id]);
+  const totalCartCount = cartLines.reduce(
+    (acc, i) => acc + (cart[i.id] ?? 0),
+    0
+  );
+  const cartSubtotal = cartLines.reduce(
+    (acc, i) => acc + (cart[i.id] ?? 0) * i.price,
+    0
+  );
+
+  const activeOrders = data?.orders.filter((o) => o.status !== "served") ?? [];
+  const servedOrders = data?.orders.filter((o) => o.status === "served") ?? [];
+  const editingOrder =
+    data?.orders.find((o) => o.id === editingId) ?? null;
+
+  const refreshTable = useCallback(async () => {
+    await fetchTableData(false);
+  }, [fetchTableData]);
+
+  const handlePlaceOrder = async () => {
+    if (placing || totalCartCount === 0 || !token) return;
 
     setPlacing(true);
     setNotice(null);
@@ -174,241 +302,356 @@ export default function TablePage() {
           })),
         }),
       });
-      const data = await res.json();
+
+      const result = await res.json();
       if (!res.ok) {
-        showNotice(false, data.error ?? "Order failed. Please try again.");
+        showNotice(
+          false,
+          result.error ?? "Failed to place order. Please try again."
+        );
         return;
       }
+
       setCart({});
       setNotes({});
       setReviewing(false);
-      showNotice(true, "Order placed. The kitchen has it.");
-      if (token) loadInfo(token);
+      showNotice(true, "Order placed! Kitchen has received your dishes.");
+      refreshTable();
+    } catch {
+      showNotice(false, "Network error placing order. Please try again.");
     } finally {
       setPlacing(false);
     }
   };
 
-  const wrap = "min-h-screen bg-[#F2F4F1] text-[#1C2333]";
+  // SSR and initial client hydration view (100% match)
+  if (!mounted) {
+    return <TableLoadingScreen />;
+  }
 
-  if (token === "")
+  // Client view: Missing QR token
+  if (!token) {
     return (
-      <div className={`${wrap} p-8 text-center text-lg`}>
-        Scan the QR code on your table to see the menu.
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8F5EF] p-6 text-center text-[#252D38]">
+        <div className="rounded-2xl bg-white p-8 shadow-sm border border-[#252D38]/10 max-w-sm">
+          <Image
+            src="/logo.png"
+            alt="Restaurant Logo"
+            width={120}
+            height={80}
+            className="mx-auto mb-4 h-16 w-auto"
+            priority
+          />
+          <h1 className="text-xl font-bold text-[#193A2D] mb-2">Welcome</h1>
+          <p className="text-sm text-[#252D38]/70 leading-relaxed">
+            Please scan the QR code located on your table to view our menu and order.
+          </p>
+        </div>
       </div>
     );
-  if (invalid)
+  }
+
+  // Client view: Invalid QR token
+  if (invalid) {
     return (
-      <div className={`${wrap} p-8 text-center text-lg`}>
-        This QR code isn&apos;t valid. Please ask a staff member for help.
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8F5EF] p-6 text-center text-[#252D38]">
+        <div className="rounded-2xl bg-white p-8 shadow-sm border border-red-200 max-w-sm">
+          <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+            !
+          </div>
+          <h1 className="text-lg font-bold text-red-700 mb-2">
+            Invalid QR Code
+          </h1>
+          <p className="text-sm text-[#252D38]/70 leading-relaxed">
+            This table code could not be verified. Please ask a restaurant staff member for assistance.
+          </p>
+        </div>
       </div>
     );
+  }
 
   return (
-    <div className={`${wrap} mx-auto max-w-md pb-32`}>
-      <div ref={stickyRef} className="sticky top-0 z-20">
-        <header className="flex items-center justify-between border-b border-[#DCB736] bg-[#FFF4C2] px-5 py-2">
-          <h1 className="m-0">
-            <img
+    <div className="mx-auto min-h-screen max-w-md bg-[#F8F5EF] text-[#252D38] pb-36 selection:bg-[#E7B94F] selection:text-[#193A2D]">
+      {/* Pinned Restaurant Header & Search */}
+      <div className="sticky top-0 z-30 bg-[#F8F5EF]/95 backdrop-blur-md border-b border-[#252D38]/10">
+        <header className="flex items-center justify-between px-4 py-3 bg-[#193A2D] text-[#F8F5EF] shadow-sm">
+          <div className="flex items-center gap-3">
+            <Image
               src="/logo.png"
-              alt={info?.restaurant || "Restaurant logo"}
-              width={98}
-              height={64}
-              className="h-16 w-auto"
+              alt="Restaurant Logo"
+              width={70}
+              height={44}
+              className="h-10 w-auto rounded object-contain bg-white/10 p-0.5"
+              priority
             />
-          </h1>
-          <div className="ml-3 flex shrink-0 flex-col items-end gap-1">
-            <span className="text-sm font-semibold text-[#14511D]">
-              {info ? `Table ${info.table}` : ""}
-            </span>
-            <CallWaiter token={token} />
+            <div>
+              <h1 className="text-sm font-bold tracking-wide uppercase text-[#E7B94F]">
+                {data?.restaurant?.name || "Green Embassy"}
+              </h1>
+              <p className="text-xs font-semibold text-[#F8F5EF]/80">
+                {data ? `Table ${data.table}` : "Table Order"}
+              </p>
+            </div>
+          </div>
+          <div>
+            <CallWaiter token={token} initialCalled={data?.waiterCalled} />
           </div>
         </header>
 
+        {/* Global Alert Notification */}
         {notice && (
-          <p
-            className={`px-5 py-2 text-sm font-medium ${
-              notice.ok ? "bg-green-700 text-white" : "bg-red-700 text-white"
+          <div
+            role="alert"
+            className={`px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-all ${
+              notice.ok
+                ? "bg-emerald-700 text-white"
+                : "bg-rose-700 text-white"
             }`}
           >
-            {notice.text}
-          </p>
-        )}
-
-        {active.length > 0 && (
-          <div className="max-h-24 overflow-y-auto border-b border-[#1C2333]/15 bg-white px-5 py-2">
-            <ul className="space-y-1.5">
-              {active.map((o) => (
-                <li
-                  key={o.id}
-                  className="flex items-center justify-between gap-2 text-sm"
-                >
-                  <span className="min-w-0 flex-1 truncate" title={summary(o)}>
-                    {summary(o)}
-                  </span>
-                  {o.status === "placed" && (
-                    <ChangeButton
-                      order={o}
-                      fetchedAt={fetchedAt}
-                      onOpen={() => setEditingId(o.id)}
-                    />
-                  )}
-                  <span className={chip(o.status)}>
-                    {STATUS_TEXT[o.status] ?? o.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <span>{notice.text}</span>
+            <button
+              onClick={() => setNotice(null)}
+              className="ml-2 font-bold text-base leading-none"
+            >
+              ×
+            </button>
           </div>
         )}
 
-        <div className="border-b border-[#1C2333]/15 bg-[#F2F4F1] px-4 py-3">
+        {/* Search Bar */}
+        <div className="px-4 py-2.5 bg-[#F8F5EF]">
           <div className="relative">
             <input
               type="text"
               enterKeyHint="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search dishes"
+              placeholder="Search dishes, drinks, desserts..."
               aria-label="Search dishes"
-              className="h-11 w-full rounded-lg border-2 border-[#1C2333]/30 bg-white pl-3 pr-10 text-base"
+              className="h-10 w-full rounded-full border border-[#252D38]/20 bg-white pl-9 pr-9 text-sm text-[#252D38] placeholder:text-[#252D38]/50 focus:border-[#193A2D] focus:ring-1 focus:ring-[#193A2D] focus:outline-none transition-all shadow-xs"
             />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#252D38]/40 text-xs">
+              🔍
+            </span>
             {query && (
               <button
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-xl"
+                aria-label="Clear search query"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-[#252D38]/10 text-xs font-bold text-[#252D38]/70 hover:bg-[#252D38]/20"
               >
                 ×
               </button>
             )}
           </div>
 
-          {!q && (
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={() =>
-                  chipsRef.current?.scrollBy({ left: -240, behavior: "smooth" })
-                }
-                aria-label="Scroll categories left"
-                className="hidden h-8 w-8 shrink-0 rounded-full border border-[#1C2333]/30 [@media(hover:hover)]:block"
-              >
-                ‹
-              </button>
-              <nav
-                ref={chipsRef}
-                className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {categories.map(([cat], idx) => (
+          {/* Category Chips Bar */}
+          {!q && categories.length > 0 && (
+            <nav
+              ref={chipsRef}
+              className="mt-2.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {categories.map(([cat], idx) => {
+                const isSelected = currentCategory === cat;
+                return (
                   <button
                     key={cat}
-                    onClick={() =>
+                    onClick={() => {
+                      setActiveCategory(cat);
                       document
                         .getElementById(`cat-${idx}`)
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                    }
-                    className="shrink-0 rounded-full border border-[#1C2333]/30 px-4 py-1.5 text-sm font-medium"
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold transition-all ${
+                      isSelected
+                        ? "bg-[#193A2D] text-[#E7B94F] shadow-xs"
+                        : "bg-white text-[#252D38]/80 border border-[#252D38]/15 hover:bg-stone-50"
+                    }`}
                   >
                     {cat}
                   </button>
-                ))}
-              </nav>
-              <button
-                onClick={() =>
-                  chipsRef.current?.scrollBy({ left: 240, behavior: "smooth" })
-                }
-                aria-label="Scroll categories right"
-                className="hidden h-8 w-8 shrink-0 rounded-full border border-[#1C2333]/30 [@media(hover:hover)]:block"
-              >
-                ›
-              </button>
-            </div>
+                );
+              })}
+            </nav>
           )}
         </div>
       </div>
 
-      {served.length > 0 && !q && (
-        <section className="px-5 pt-5">
-          <h2 className="mb-2 text-lg font-bold">Served</h2>
-          <ul className="divide-y divide-[#1C2333]/15 border-y border-[#1C2333]/15">
-            {served.map((o) => (
-              <li key={o.id} className="py-3 text-sm text-[#1C2333]/70">
-                {summary(o)}
-              </li>
-            ))}
+      {/* Active Orders Tracker Banner */}
+      {activeOrders.length > 0 && (
+        <section className="mx-4 mt-3 rounded-2xl bg-white p-3.5 border border-[#193A2D]/20 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#193A2D]">
+              Active Orders ({activeOrders.length})
+            </span>
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+          </div>
+          <ul className="space-y-2">
+            {activeOrders.map((ord) => {
+              const statusCfg = STATUS_CONFIG[ord.status] ?? {
+                label: ord.status,
+                badgeClass: "bg-stone-200 text-stone-800",
+                step: 1,
+              };
+              const itemsSummary = ord.order_items
+                .map((i) => `${i.quantity}× ${i.name_snapshot}`)
+                .join(", ");
+
+              return (
+                <li
+                  key={ord.id}
+                  className="rounded-xl bg-[#F8F5EF] p-2.5 border border-[#252D38]/10 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-semibold ${statusCfg.badgeClass}`}
+                    >
+                      {statusCfg.label}
+                    </span>
+                    {ord.status === "placed" && (
+                      <ChangeButton
+                        order={ord}
+                        fetchedAt={fetchedAt}
+                        onOpen={() => setEditingId(ord.id)}
+                      />
+                    )}
+                  </div>
+                  <p
+                    className="font-medium text-[#252D38] truncate"
+                    title={itemsSummary}
+                  >
+                    {itemsSummary}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
 
-      <main className="px-5">
+      {/* Served Orders Summary */}
+      {servedOrders.length > 0 && !q && (
+        <section className="mx-4 mt-3 rounded-2xl bg-stone-100 p-3 border border-stone-200 text-xs">
+          <h2 className="font-bold text-stone-600 mb-1">Served Items</h2>
+          <p className="text-stone-500 leading-relaxed">
+            {servedOrders
+              .flatMap((o) => o.order_items)
+              .map((i) => `${i.quantity}× ${i.name_snapshot}`)
+              .join(", ")}
+          </p>
+        </section>
+      )}
+
+      {/* Main Menu Sections */}
+      <main className="px-4">
+        {loading && (
+          <div className="py-16 text-center text-sm text-[#252D38]/60">
+            <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#193A2D] border-t-transparent mb-2" />
+            <p>Loading fresh restaurant menu...</p>
+          </div>
+        )}
+
+        {!loading && categories.length === 0 && (
+          <div className="py-16 text-center text-sm text-[#252D38]/60">
+            {q ? (
+              <p>No dishes found matching &ldquo;{query}&rdquo;.</p>
+            ) : (
+              <p>No menu items currently available for this restaurant.</p>
+            )}
+          </div>
+        )}
+
         {categories.map(([cat, list], idx) => (
           <section
             key={cat}
             id={`cat-${idx}`}
-            className="pt-6"
-            style={{ scrollMarginTop: stickyH + 8 }}
+            className="pt-5"
+            style={{ scrollMarginTop: "140px" }}
           >
-            <h2 className="mb-1 text-xl font-bold">{cat}</h2>
-            <ul className="divide-y divide-[#1C2333]/15">
+            <div className="flex items-center justify-between border-b border-[#252D38]/10 pb-1.5 mb-3">
+              <h2 className="text-base font-bold text-[#193A2D]">{cat}</h2>
+              <span className="text-xs text-[#252D38]/50 font-medium">
+                {list.length} {list.length === 1 ? "dish" : "dishes"}
+              </span>
+            </div>
+
+            <ul className="space-y-3">
               {list.map((item) => {
                 const qty = cart[item.id] ?? 0;
                 return (
-                  <li key={item.id} id={`item-${item.id}`} className="py-4">
-                    <div className="flex items-start gap-3">
-                      <VegMark veg={item.is_veg} />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold leading-snug">{item.name}</p>
-                        {item.description && (
-                          <p className="mt-0.5 text-sm text-[#1C2333]/70">
-                            {item.description}
-                          </p>
-                        )}
-                        <p className="mt-1 font-medium tabular-nums">₹{item.price}</p>
-                      </div>
-                      {qty === 0 ? (
-                        <button
-                          onClick={() => change(item.id, 1)}
-                          className="h-10 w-24 rounded-lg border-2 border-[#1C2333] font-bold active:bg-[#1C2333] active:text-white"
-                        >
-                          Add
-                        </button>
-                      ) : (
-                        <div className="flex h-10 w-24 items-center justify-between rounded-lg bg-[#1C2333] text-white">
-                          <button
-                            aria-label={`Remove one ${item.name}`}
-                            onClick={() => change(item.id, -1)}
-                            className="h-10 w-9 text-xl"
-                          >
-                            −
-                          </button>
-                          <span className="font-bold tabular-nums">{qty}</span>
-                          <button
-                            aria-label={`Add one ${item.name}`}
-                            onClick={() => change(item.id, 1)}
-                            className="h-10 w-9 text-xl"
-                          >
-                            +
-                          </button>
+                  <li
+                    key={item.id}
+                    id={`item-${item.id}`}
+                    className="rounded-2xl bg-white p-3.5 border border-[#252D38]/10 shadow-xs hover:border-[#193A2D]/30 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        <div className="mt-1">
+                          <VegBadge veg={item.is_veg} />
                         </div>
-                      )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm leading-snug text-[#252D38]">
+                            {item.name}
+                          </h3>
+                          {item.description && (
+                            <p className="mt-1 text-xs text-[#252D38]/70 line-clamp-2 leading-relaxed">
+                              {item.description}
+                            </p>
+                          )}
+                          <p className="mt-2 text-sm font-bold tabular-nums text-[#193A2D]">
+                            ₹{item.price}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Add Button / Stepper */}
+                      <div className="shrink-0">
+                        {qty === 0 ? (
+                          <button
+                            onClick={() => changeQty(item.id, 1)}
+                            className="h-9 w-20 rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] shadow-xs hover:bg-[#122b21] active:scale-95 transition-all"
+                          >
+                            + ADD
+                          </button>
+                        ) : (
+                          <div className="flex h-9 w-22 items-center justify-between rounded-xl bg-[#193A2D] px-1 text-white shadow-xs">
+                            <button
+                              aria-label={`Reduce ${item.name}`}
+                              onClick={() => changeQty(item.id, -1)}
+                              className="h-8 w-7 text-base font-bold text-[#E7B94F] hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              −
+                            </button>
+                            <span className="font-bold tabular-nums text-xs">
+                              {qty}
+                            </span>
+                            <button
+                              aria-label={`Add another ${item.name}`}
+                              onClick={() => changeQty(item.id, 1)}
+                              className="h-8 w-7 text-base font-bold text-[#E7B94F] hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
+                    {/* Preparation note input when selected */}
                     {qty > 0 && (
-                      <div className="ml-7 mt-3">
+                      <div className="mt-2.5 pt-2 border-t border-[#252D38]/5">
                         <input
                           type="text"
                           maxLength={150}
                           value={notes[item.id] ?? ""}
                           onChange={(e) =>
-                            setNotes((n) => ({ ...n, [item.id]: e.target.value }))
+                            setNotes((prev) => ({
+                              ...prev,
+                              [item.id]: e.target.value,
+                            }))
                           }
-                          placeholder={
-                            needsChoice(item)
-                              ? "Your choice, e.g. Manchurian"
-                              : "Note for kitchen, e.g. less spicy"
-                          }
+                          placeholder="Special instruction (e.g. less spicy, no onion)"
                           aria-label={`Note for ${item.name}`}
-                          className="h-10 w-full rounded-lg border-2 border-[#1C2333]/30 bg-white px-3 text-base"
+                          className="h-8 w-full rounded-lg border border-[#252D38]/15 bg-[#F8F5EF] px-2.5 text-xs text-[#252D38] placeholder:text-[#252D38]/50 focus:border-[#193A2D] focus:bg-white focus:outline-none transition-all"
                         />
                       </div>
                     )}
@@ -418,77 +661,110 @@ export default function TablePage() {
             </ul>
           </section>
         ))}
-        {items.length === 0 && (
-          <p className="py-10 text-center text-[#1C2333]/70">Loading the menu.</p>
-        )}
-        {items.length > 0 && q && categories.length === 0 && (
-          <p className="py-10 text-center text-[#1C2333]/70">
-            No dishes found for &ldquo;{query}&rdquo;.
-          </p>
-        )}
       </main>
 
-      {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md">
+      {/* Floating Bottom Cart Bar */}
+      {totalCartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md p-3">
+          {/* Slide-up Review Sheet */}
           {reviewing && (
-            <div className="max-h-[55vh] overflow-y-auto border-t border-[#1C2333]/20 bg-white px-5 py-3">
-              <ul className="divide-y divide-[#1C2333]/15">
+            <div className="mb-2 max-h-[55vh] overflow-y-auto rounded-2xl border border-[#252D38]/15 bg-white p-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#252D38]/10 pb-2 mb-3">
+                <h3 className="font-bold text-sm text-[#193A2D]">
+                  Order Review
+                </h3>
+                <button
+                  onClick={() => setReviewing(false)}
+                  className="text-xs text-[#252D38]/60 hover:text-[#252D38]"
+                >
+                  Close ×
+                </button>
+              </div>
+
+              <ul className="divide-y divide-[#252D38]/10">
                 {cartLines.map((i) => (
-                  <li key={i.id} className="flex items-center justify-between gap-3 py-2">
-                    <span className="min-w-0 flex-1">
-                      {i.name}
-                      {(notes[i.id] ?? "").trim() && (
-                        <small className="block text-[#1C2333]/70">
-                          Note: {notes[i.id].trim()}
-                        </small>
-                      )}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <button
-                        aria-label={`Remove one ${i.name}`}
-                        onClick={() => change(i.id, -1)}
-                        className="h-8 w-8 rounded border border-[#1C2333]/40"
-                      >
-                        −
-                      </button>
-                      <span className="w-5 text-center tabular-nums">{cart[i.id]}</span>
-                      <button
-                        aria-label={`Add one ${i.name}`}
-                        onClick={() => change(i.id, 1)}
-                        className="h-8 w-8 rounded border border-[#1C2333]/40"
-                      >
-                        +
-                      </button>
-                    </span>
-                    <span className="w-16 text-right tabular-nums">
-                      ₹{cart[i.id] * i.price}
-                    </span>
+                  <li key={i.id} className="py-2.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-[#252D38]">{i.name}</p>
+                        {(notes[i.id] ?? "").trim() && (
+                          <p className="text-[11px] text-[#193A2D] italic">
+                            Note: {notes[i.id].trim()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => changeQty(i.id, -1)}
+                          className="h-6 w-6 rounded border border-[#252D38]/20 font-bold"
+                        >
+                          −
+                        </button>
+                        <span className="w-5 text-center font-bold tabular-nums">
+                          {cart[i.id]}
+                        </span>
+                        <button
+                          onClick={() => changeQty(i.id, 1)}
+                          className="h-6 w-6 rounded border border-[#252D38]/20 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span className="w-14 text-right font-bold tabular-nums text-[#193A2D]">
+                        ₹{cart[i.id] * i.price}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
+
+              <div className="mt-3 pt-2 border-t border-[#252D38]/10 flex items-center justify-between text-xs font-semibold">
+                <span>Subtotal ({totalCartCount} items)</span>
+                <span className="font-bold tabular-nums text-[#193A2D]">
+                  ₹{cartSubtotal}
+                </span>
+              </div>
             </div>
           )}
-          <div className="flex items-center justify-between gap-3 bg-[#1C2333] px-5 py-4 text-white">
-            <button onClick={() => setReviewing(!reviewing)} className="text-left">
-              <span className="block text-sm text-white/70">
-                {count} {count === 1 ? "item" : "items"},{" "}
-                {reviewing ? "tap to hide" : "tap to review"}
-              </span>
-              <span className="text-xl font-bold tabular-nums text-[#F2B01E]">
-                ₹{total}
-              </span>
-            </button>
+
+          {/* Action Bar */}
+          <div className="flex items-center justify-between rounded-2xl bg-[#193A2D] px-4 py-3 text-white shadow-xl">
             <button
-              onClick={placeOrder}
-              disabled={placing}
-              className="rounded-lg bg-[#F2B01E] px-5 py-3 font-bold text-[#1C2333] disabled:opacity-50"
+              onClick={() => setReviewing(!reviewing)}
+              className="text-left"
             >
-              {placing ? "Placing order" : "Place order"}
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-5 items-center justify-center rounded-full bg-[#E7B94F] px-2 text-[11px] font-bold text-[#193A2D]">
+                  {totalCartCount}
+                </span>
+                <span className="text-xs text-white/80">
+                  {reviewing ? "Hide Details" : "View Order"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[#E7B94F]">
+                ₹{cartSubtotal}
+              </p>
+            </button>
+
+            <button
+              onClick={handlePlaceOrder}
+              disabled={placing}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#E7B94F] px-5 py-2.5 font-bold text-sm text-[#193A2D] shadow-md hover:bg-[#d8a83e] active:scale-95 disabled:opacity-50 transition-all"
+            >
+              {placing ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#193A2D] border-t-transparent" />
+                  Placing...
+                </>
+              ) : (
+                "Place Order →"
+              )}
             </button>
           </div>
         </div>
       )}
 
+      {/* Customer Order Editor Modal */}
       {editingOrder && token && (
         <OrderEditor
           key={editingOrder.id}
@@ -496,13 +772,21 @@ export default function TablePage() {
           order={editingOrder}
           fetchedAt={fetchedAt}
           onClose={() => setEditingId(null)}
-          onChanged={(message) => {
+          onChanged={(msg) => {
             setEditingId(null);
-            showNotice(true, message);
-            loadInfo(token);
+            showNotice(true, msg);
+            refreshTable();
           }}
         />
       )}
     </div>
+  );
+}
+
+export default function TablePage() {
+  return (
+    <Suspense fallback={<TableLoadingScreen />}>
+      <TableContent />
+    </Suspense>
   );
 }

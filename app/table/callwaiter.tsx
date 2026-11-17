@@ -1,46 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 
-export default function CallWaiter({ token }: { token: string | null }) {
-  const [called, setCalled] = useState(false);
+export default function CallWaiter({
+  token,
+  initialCalled = false,
+}: {
+  token: string | null;
+  initialCalled?: boolean;
+}) {
+  const [userCalled, setUserCalled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const inFlightRef = useRef(false);
 
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`/api/waiter?t=${encodeURIComponent(token)}`, {
-        cache: "no-store",
-      });
-      if (res.ok) setCalled((await res.json()).called);
-    } catch {
-      // ignore, the next check will retry
-    }
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, 5000);
-    return () => clearInterval(timer);
-  }, [refresh]);
+  const called = initialCalled || userCalled;
 
   const call = async () => {
-    if (!token || busy || called) return;
+    if (!token || busy || called || inFlightRef.current) return;
     setBusy(true);
     setFailed(false);
+    inFlightRef.current = true;
+
     try {
       const res = await fetch("/api/waiter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      if (res.ok) setCalled(true);
-      else setFailed(true);
+      if (res.ok) {
+        setUserCalled(true);
+      } else {
+        setFailed(true);
+      }
     } catch {
       setFailed(true);
     } finally {
       setBusy(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -48,17 +45,25 @@ export default function CallWaiter({ token }: { token: string | null }) {
     <button
       onClick={call}
       disabled={busy || called}
-      className={`rounded-full border-2 border-[#14511D] px-3 py-1 text-sm font-semibold ${
-        called ? "text-[#14511D]" : "bg-[#14511D] text-[#FFF4C2]"
+      aria-label={called ? "Waiter has been called" : "Call waiter to table"}
+      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all shadow-sm ${
+        called
+          ? "bg-[#193A2D]/15 text-[#193A2D] border border-[#193A2D]/30"
+          : "bg-[#193A2D] text-[#F8F5EF] hover:bg-[#122b21] active:scale-95"
       }`}
     >
+      <span
+        className={`h-2 w-2 rounded-full ${
+          called ? "bg-amber-500 animate-pulse" : "bg-[#E7B94F]"
+        }`}
+      />
       {called
-        ? "Waiter is on the way"
+        ? "Waiter Notified"
         : busy
-        ? "Calling"
+        ? "Calling..."
         : failed
-        ? "Try again"
-        : "Call waiter"}
+        ? "Retry Call"
+        : "Call Waiter"}
     </button>
   );
 }
