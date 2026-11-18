@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       .eq("status", "open")
       .order("created_at", { ascending: true });
 
-    if (staff?.restaurantId) {
+    if (staff.role !== "platform_admin") {
       query = query.eq("tables.restaurant_id", staff.restaurantId);
     }
 
@@ -95,11 +95,7 @@ export async function PATCH(req: Request) {
     }
 
     const callTable = call.tables as unknown as { restaurant_id: string } | null;
-    if (
-      staff?.restaurantId &&
-      callTable?.restaurant_id &&
-      staff.restaurantId !== callTable.restaurant_id
-    ) {
+    if (staff.role !== "platform_admin" && callTable?.restaurant_id !== staff.restaurantId) {
       return apiError("Forbidden: Waiter call belongs to another restaurant.", 403);
     }
 

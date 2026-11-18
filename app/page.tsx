@@ -52,38 +52,38 @@ export default function Home() {
         </div>
 
         {/* Portal Stations Grid */}
-        <div className="grid gap-6 md:grid-cols-3 mb-16">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-16">
           {/* Card 1: Customer QR Ordering */}
-          <div className="flex flex-col justify-between rounded-3xl bg-white p-7 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
+          <div className="flex flex-col justify-between rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
             <div>
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-5">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-4">
                 📱
               </div>
-              <h2 className="text-xl font-black text-[#193A2D]">Table QR Menu</h2>
+              <h2 className="text-lg font-black text-[#193A2D]">Table QR Menu</h2>
               <p className="mt-2 text-xs text-[#252D38]/70 leading-relaxed">
-                Mobile-first digital menu for guests. Instant search, veg/non-veg tags, customizable preparation notes, live status tracking, and waiter calling.
+                Guest interface. Category tabs, veg/non-veg tags, preparation notes, countdown window and waiter calling.
               </p>
             </div>
 
             <div className="mt-6 pt-4 border-t border-[#252D38]/10">
               <Link
                 href="/table?t=b61bd809b5cce05fa43190684d18e8df"
-                className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] active:scale-95 transition-all"
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] active:scale-95 transition-all"
               >
-                Launch Table T1 Demo →
+                Launch Table T1 →
               </Link>
             </div>
           </div>
 
           {/* Card 2: Kitchen Display System (KDS) */}
-          <div className="flex flex-col justify-between rounded-3xl bg-white p-7 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
+          <div className="flex flex-col justify-between rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
             <div>
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-5">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-4">
                 👨‍🍳
               </div>
-              <h2 className="text-xl font-black text-[#193A2D]">Kitchen Display</h2>
+              <h2 className="text-lg font-black text-[#193A2D]">Kitchen Display</h2>
               <p className="mt-2 text-xs text-[#252D38]/70 leading-relaxed">
-                Professional 3-stage ticket display (New, Preparing, Ready). Customer modification countdown, audible order chime, and urgent waiter call alerts.
+                Chef operations. 3-stage visual pipeline, edit lock countdown, arrival chime, and urgent waiter call alerts.
               </p>
             </div>
 
@@ -98,14 +98,14 @@ export default function Home() {
           </div>
 
           {/* Card 3: Manager Billing Desk */}
-          <div className="flex flex-col justify-between rounded-3xl bg-white p-7 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
+          <div className="flex flex-col justify-between rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
             <div>
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-5">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-4">
                 💼
               </div>
-              <h2 className="text-xl font-black text-[#193A2D]">Manager Billing</h2>
+              <h2 className="text-lg font-black text-[#193A2D]">Manager Billing</h2>
               <p className="mt-2 text-xs text-[#252D38]/70 leading-relaxed">
-                Central cashier operations. Real-time table occupancy grid, automated aggregation of non-cancelled dishes, verified tax/discounts, and printable receipts.
+                Cashier settlement. Table occupancy grid, dish aggregation, discount calculation, and printable receipts.
               </p>
             </div>
 
@@ -115,6 +115,28 @@ export default function Home() {
                 className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] active:scale-95 transition-all"
               >
                 Access Billing Desk →
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 4: Restaurant Admin Console */}
+          <div className="flex flex-col justify-between rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm hover:shadow-xl hover:border-[#193A2D]/40 transition-all">
+            <div>
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#193A2D] text-2xl text-[#E7B94F] mb-4">
+                ⚙️
+              </div>
+              <h2 className="text-lg font-black text-[#193A2D]">Restaurant Admin</h2>
+              <p className="mt-2 text-xs text-[#252D38]/70 leading-relaxed">
+                Management console. Menu catalog, dish pricing, table QR generation, print stand sheets, and sales reports.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-[#252D38]/10">
+              <Link
+                href="/admin"
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] active:scale-95 transition-all"
+              >
+                Open Admin Console →
               </Link>
             </div>
           </div>

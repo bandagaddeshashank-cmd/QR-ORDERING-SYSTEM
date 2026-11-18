@@ -119,11 +119,48 @@ export type Bill = {
   createdAt?: string;
 };
 
-export type StaffRole = "manager" | "staff";
+export type StaffRole = "manager" | "staff" | "platform_admin";
 
 export type AuthenticatedStaff = {
   userId: string;
   email: string;
   role: StaffRole;
-  restaurantId?: string;
+  restaurantId: string;
+};
+
+export type RestaurantSettings = {
+  id: string;
+  name: string;
+  gstin: string | null;
+  tax_percent: number;
+  service_charge_percent: number;
+  cancel_window_seconds: number;
+  logo_url?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  is_open?: boolean;
+};
+
+export type CreateMenuItemInput = {
+  name: string;
+  description?: string;
+  category: string;
+  price: number;
+  is_veg: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
+export type UpdateMenuItemInput = Partial<CreateMenuItemInput>;
+
+export type ReportOverview = {
+  totalSales: number;
+  billsCount: number;
+  averageBillValue: number;
+  totalTax: number;
+  totalDiscount: number;
+  paymentMethodBreakdown: Record<PaymentMethod, number>;
+  popularItems: { name: string; quantity: number; revenue: number }[];
+  categorySales: { category: string; revenue: number; itemsSold: number }[];
+  tableUtilization: { label: string; billsCount: number; totalSales: number }[];
 };

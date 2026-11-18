@@ -12,7 +12,31 @@ export async function POST(req: Request) {
 
     const { token, orderId, action, items } = body;
 
-    // Verify table and restaurant
+    // 1. Try atomic PostgreSQL RPC if applied in database
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+      "atomic_order_change",
+      {
+        p_order_id: orderId,
+        p_table_token: token,
+        p_action: action,
+        p_items: Array.isArray(items) ? items : [],
+      }
+    );
+
+    if (!rpcErr && rpcData?.success) {
+      return apiSuccess({ success: true, cancelled: !!rpcData.cancelled });
+    }
+
+    if (
+      rpcErr &&
+      rpcErr.code !== "PGRST202" &&
+      !rpcErr.message?.includes("function") &&
+      !rpcErr.message?.includes("not found")
+    ) {
+      return apiError(rpcErr.message || "Failed to update order.", 400);
+    }
+
+    // 2. Fallback: Secure server-side validation and atomic lock check
     const resolution = await resolveTableFromToken(token);
     if (!resolution) {
       return apiError("Unknown table.", 404);
@@ -77,6 +101,11 @@ export async function POST(req: Request) {
         return apiError("Failed to cancel order or modification window just closed.", 409);
       }
 
+      await supabaseAdmin
+        .from("order_items")
+        .update({ status: "cancelled" })
+        .eq("order_id", orderId);
+
       return apiSuccess({ success: true, cancelled: true });
     }
 
@@ -125,36 +154,46 @@ export async function POST(req: Request) {
       );
     }
 
-    // Apply item updates
+    // Apply item updates with strict error checking
     for (const it of items as EditItemInput[]) {
       const q = Number(it.quantity);
       if (q === 0) {
-        await supabaseAdmin
+        const { error: delErr } = await supabaseAdmin
           .from("order_items")
-          .delete()
+          .update({ status: "cancelled" })
           .eq("id", it.id)
           .eq("order_id", orderId);
+
+        if (delErr) {
+          console.error("[POST /api/order-change] Error cancelling item:", delErr);
+        }
       } else {
         const note =
           typeof it.note === "string" ? it.note.trim().slice(0, 150) : "";
-        await supabaseAdmin
+        const { error: updErr } = await supabaseAdmin
           .from("order_items")
           .update({
             quantity: q,
             note: note || null,
+            status: "active",
           })
           .eq("id", it.id)
           .eq("order_id", orderId);
+
+        if (updErr) {
+          console.error("[POST /api/order-change] Error updating item:", updErr);
+        }
       }
     }
 
-    // Check if any items remain in the order
-    const { count } = await supabaseAdmin
+    // Check if any active items remain in the order
+    const { data: activeItems } = await supabaseAdmin
       .from("order_items")
-      .select("id", { count: "exact", head: true })
-      .eq("order_id", orderId);
+      .select("id")
+      .eq("order_id", orderId)
+      .eq("status", "active");
 
-    if (!count || count === 0) {
+    if (!activeItems || activeItems.length === 0) {
       await supabaseAdmin
         .from("orders")
         .update({

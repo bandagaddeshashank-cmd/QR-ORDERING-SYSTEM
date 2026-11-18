@@ -124,7 +124,7 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   }
 
   const role = session.user.app_metadata?.role;
-  if (role !== "manager" && role !== "staff") {
+  if (role !== "manager" && role !== "staff" && role !== "platform_admin") {
     return (
       <div className={`${shell} flex items-center justify-center`}>
         <main className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl border border-red-200 text-center">

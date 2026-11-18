@@ -53,7 +53,7 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: true });
 
     // Multi-tenant restaurant scoping
-    if (staff?.restaurantId) {
+    if (staff.role !== "platform_admin") {
       query = query.eq("table_sessions.tables.restaurant_id", staff.restaurantId);
     }
 
@@ -122,7 +122,7 @@ export async function PATCH(req: Request) {
     // Multi-tenant isolation check
     const session = order.table_sessions as unknown as Windowed;
     const orderRestaurantId = session?.tables?.restaurant_id;
-    if (staff?.restaurantId && orderRestaurantId && staff.restaurantId !== orderRestaurantId) {
+    if (staff.role !== "platform_admin" && orderRestaurantId !== staff.restaurantId) {
       return apiError("Forbidden: Order does not belong to your restaurant.", 403);
     }
 

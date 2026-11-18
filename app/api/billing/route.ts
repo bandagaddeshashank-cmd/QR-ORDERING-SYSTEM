@@ -163,7 +163,7 @@ export async function GET(req: Request) {
 
     // 2. Manager Dashboard Overview Mode
     let restQuery = supabaseAdmin.from("restaurants").select("*");
-    if (manager?.restaurantId) {
+    if (manager.role !== "platform_admin") {
       restQuery = restQuery.eq("id", manager.restaurantId);
     }
     const { data: restaurants } = await restQuery.limit(1);
@@ -332,11 +332,53 @@ export async function POST(req: Request) {
       return apiError("Invalid payment method. Choose Cash, UPI, Card, or Other.", 400);
     }
 
-    // Build and verify bill strictly on server
+    // 1. Try atomic PostgreSQL RPC if applied in database
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+      "settle_session_bill",
+      {
+        p_session_id: sessionId,
+        p_restaurant_id: manager.role !== "platform_admin" ? manager.restaurantId : null,
+        p_discount: Number(discount) || 0,
+        p_payment_method: paymentMethod,
+      }
+    );
+
+    if (!rpcErr && rpcData?.success) {
+      const { bill } = await buildBillForSession(
+        sessionId,
+        Number(discount) || 0,
+        manager.role !== "platform_admin" ? manager.restaurantId : undefined
+      );
+
+      return apiSuccess({
+        ...(bill || {}),
+        id: rpcData.bill_id,
+        billNumber: rpcData.bill_number,
+        subtotal: rpcData.subtotal,
+        discount: rpcData.discount,
+        service: rpcData.service_charge,
+        tax: rpcData.tax,
+        total: rpcData.total,
+        paymentMethod: rpcData.payment_method,
+        createdAt: rpcData.created_at,
+        success: true,
+      });
+    }
+
+    if (
+      rpcErr &&
+      rpcErr.code !== "PGRST202" &&
+      !rpcErr.message?.includes("function") &&
+      !rpcErr.message?.includes("not found")
+    ) {
+      return apiError(rpcErr.message || "Failed to settle bill.", 400);
+    }
+
+    // 2. Fallback: Secure server-side calculation and rollback
     const { bill, error, sessionStatus } = await buildBillForSession(
       sessionId,
       Number(discount) || 0,
-      manager?.restaurantId
+      manager.role !== "platform_admin" ? manager.restaurantId : undefined
     );
 
     if (error || !bill) {
@@ -382,7 +424,9 @@ export async function POST(req: Request) {
       .eq("status", "open");
 
     if (sessionUpdateErr) {
-      console.error("[POST /api/billing] Session closure warning:", sessionUpdateErr);
+      console.error("[POST /api/billing] Session closure failed, rolling back bill insert:", sessionUpdateErr);
+      await supabaseAdmin.from("bills").delete().eq("id", savedBill.id);
+      return apiError("Failed to close table session. Settlement rolled back.", 500);
     }
 
     return apiSuccess({

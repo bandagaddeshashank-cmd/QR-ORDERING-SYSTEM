@@ -56,18 +56,27 @@ export async function getAuthenticatedStaff(
     }
 
     const role = data.user.app_metadata?.role as StaffRole | undefined;
-    if (role !== "manager" && role !== "staff") {
+    if (role !== "manager" && role !== "staff" && role !== "platform_admin") {
       return null;
     }
 
-    const restaurantId = (data.user.app_metadata?.restaurant_id ||
-      data.user.user_metadata?.restaurant_id) as string | undefined;
+    const restaurantId = data.user.app_metadata?.restaurant_id as string | undefined;
+
+    // Staff and Manager MUST have a valid restaurant_id assigned in app_metadata
+    if (role !== "platform_admin") {
+      if (!restaurantId || typeof restaurantId !== "string" || restaurantId.trim().length === 0) {
+        console.error(
+          `[getAuthenticatedStaff] Rejected ${role} user ${data.user.id}: Missing restaurant_id in app_metadata.`
+        );
+        return null;
+      }
+    }
 
     return {
       userId: data.user.id,
       email: data.user.email ?? "",
       role,
-      restaurantId,
+      restaurantId: restaurantId ?? "",
     };
   } catch (err) {
     console.error("[getAuthenticatedStaff] Error verifying token:", err);
@@ -101,7 +110,7 @@ export async function requireManager(req: Request) {
     };
   }
 
-  if (staff.role !== "manager") {
+  if (staff.role !== "manager" && staff.role !== "platform_admin") {
     return {
       manager: null,
       errorResponse: apiError("Forbidden: Manager permissions required", 403),
