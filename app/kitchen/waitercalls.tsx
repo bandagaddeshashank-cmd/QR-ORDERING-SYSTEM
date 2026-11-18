@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { BellIcon, CheckIcon, ClockIcon } from "@/components/ui/icons";
 
 type Call = {
   id: string;
@@ -18,7 +19,7 @@ export default function WaiterCalls() {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 5000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -33,7 +34,7 @@ export default function WaiterCalls() {
           setCalls(Array.isArray(data) ? data : []);
         }
       } catch {
-        // network retry on next interval
+        // network retry on next poll
       }
     };
 
@@ -65,18 +66,25 @@ export default function WaiterCalls() {
 
   return (
     <section
-      aria-live="polite"
-      className="mb-6 rounded-2xl border-2 border-red-500 bg-red-50 p-4 shadow-lg animate-pulse-subtle"
+      aria-live="assertive"
+      className="mb-6 rounded-3xl border-2 border-rose-500 bg-gradient-to-r from-rose-950/80 via-[#1C2422] to-rose-950/80 p-4 sm:p-5 shadow-2xl animate-pulse-subtle"
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-3 w-3 rounded-full bg-red-600 animate-ping" />
-          <h2 className="text-lg font-black uppercase tracking-wide text-red-900">
-            Waitstaff Required at Table ({calls.length})
-          </h2>
+      <div className="flex items-center justify-between mb-3.5">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3.5 w-3.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500" />
+          </span>
+          <div className="flex items-center gap-2">
+            <BellIcon className="w-5 h-5 text-rose-400" />
+            <h2 className="text-base font-serif font-bold text-rose-100 tracking-wide">
+              Waiter Service Assistance Requested ({calls.length})
+            </h2>
+          </div>
         </div>
-        <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white uppercase">
-          Urgent Attention
+
+        <span className="rounded-full bg-rose-600 px-3 py-1 text-xs font-bold text-white tracking-wider uppercase shadow-xs">
+          Immediate Table Call
         </span>
       </div>
 
@@ -88,27 +96,38 @@ export default function WaiterCalls() {
           return (
             <div
               key={c.id}
-              className="flex items-center justify-between rounded-xl bg-white p-3.5 border border-red-200 shadow-xs"
+              className={`flex items-center justify-between rounded-2xl p-4 border transition-all ${
+                isOverdue
+                  ? "bg-rose-900/60 border-rose-400 text-rose-50 shadow-lg"
+                  : "bg-[#141A19] border-rose-700/60 text-white"
+              }`}
             >
               <div>
-                <span className="text-2xl font-black text-[#193A2D]">
-                  Table {c.tables?.label ?? "—"}
-                </span>
-                <p
-                  className={`text-xs font-semibold tabular-nums ${
-                    isOverdue ? "text-red-700 font-bold" : "text-[#252D38]/70"
-                  }`}
-                >
-                  Waiting: {mins} min{mins !== 1 ? "s" : ""} ago
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-serif font-extrabold text-[#E8B95B] tracking-tight">
+                    Table {c.tables?.label ?? "—"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1 text-xs font-medium text-rose-200/80">
+                  <ClockIcon className="w-3.5 h-3.5" />
+                  <span>
+                    {mins === 0 ? "Just now" : `${mins} min${mins !== 1 ? "s" : ""} ago`}
+                  </span>
+                  {isOverdue && (
+                    <span className="font-bold text-rose-300 ml-1 uppercase text-[10px] tracking-wider">
+                      • Priority
+                    </span>
+                  )}
+                </div>
               </div>
 
               <button
                 onClick={() => handleDone(c.id)}
                 disabled={busyId === c.id}
-                className="h-10 rounded-xl bg-[#193A2D] px-4 font-bold text-sm text-[#E7B94F] shadow-sm hover:bg-[#122b21] active:scale-95 disabled:opacity-50 transition-all"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white hover:bg-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-md"
               >
-                {busyId === c.id ? "Clearing..." : "Acknowledge"}
+                <CheckIcon className="w-4 h-4" />
+                <span>{busyId === c.id ? "Clearing..." : "Acknowledge"}</span>
               </button>
             </div>
           );

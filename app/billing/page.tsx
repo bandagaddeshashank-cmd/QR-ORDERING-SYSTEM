@@ -1,9 +1,30 @@
 "use client";
 
 import { useEffect, useState, useCallback, useId } from "react";
+import Link from "next/link";
 import ManagerGate from "./ManagerGate";
+import ReceiptPreview from "./ReceiptPreview";
+import { TableCardSkeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { authFetch } from "@/lib/authFetch";
-import type { PaymentMethod, Bill, BillLine } from "@/lib/types";
+import type { PaymentMethod, Bill } from "@/lib/types";
+import {
+  CashIcon,
+  QrCodeIcon,
+  CreditCardIcon,
+  ReceiptIcon,
+  ClockIcon,
+  PrinterIcon,
+  AlertCircleIcon,
+  CheckIcon,
+  ArrowRightIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  ChefHatIcon,
+  GridIcon,
+  SparklesIcon,
+  CloseIcon,
+} from "@/components/ui/icons";
 
 type TableCard = {
   id: string;
@@ -47,11 +68,16 @@ type OverviewData = {
   }[];
 };
 
-const METHODS: { id: PaymentMethod; label: string; icon: string }[] = [
-  { id: "cash", label: "Cash", icon: "💵" },
-  { id: "upi", label: "UPI / QR", icon: "📱" },
-  { id: "card", label: "Credit/Debit Card", icon: "💳" },
-  { id: "other", label: "Other", icon: "🧾" },
+const METHODS: {
+  id: PaymentMethod;
+  label: string;
+  description: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: "cash", label: "Cash Desk", description: "Physical cash drawer", Icon: CashIcon },
+  { id: "upi", label: "UPI & QR", description: "Instant QR / Google Pay / PhonePe", Icon: QrCodeIcon },
+  { id: "card", label: "Card POS", description: "Credit / Debit POS terminal", Icon: CreditCardIcon },
+  { id: "other", label: "Other / Ledger", description: "Voucher / Account charge", Icon: ReceiptIcon },
 ];
 
 const money = (n: number) =>
@@ -67,16 +93,21 @@ function BillingDashboard() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
 
-  // Active bill state
+  // Active Bill & Settlement State
   const [searchTable, setSearchTable] = useState("");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [discount, setDiscount] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [tenderCash, setTenderCash] = useState<string>("");
   const [currentBill, setCurrentBill] = useState<Bill | null>(null);
   const [settledBill, setSettledBill] = useState<Bill | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Table filter
+  const [tableFilter, setTableFilter] = useState<"all" | "occupied" | "vacant">("all");
+  const [historySearch, setHistorySearch] = useState("");
 
   const loadOverview = useCallback(async () => {
     try {
@@ -93,6 +124,7 @@ function BillingDashboard() {
     }
   }, []);
 
+  // Polling for live table status updates
   useEffect(() => {
     let isSubscribed = true;
     const fetchOverview = async () => {
@@ -111,17 +143,17 @@ function BillingDashboard() {
     };
 
     fetchOverview();
-    const timer = setInterval(fetchOverview, 8000);
+    const timer = setInterval(fetchOverview, 6000);
     return () => {
       isSubscribed = false;
       clearInterval(timer);
     };
   }, []);
 
-
+  // Authoritative Bill Fetch
   const loadBill = async (opts: { table?: string; sessionId?: string; disc?: string }) => {
-    setError("");
-    setSuccessMsg("");
+    setError(null);
+    setSuccessMsg(null);
     setSettledBill(null);
 
     const discValue = opts.disc !== undefined ? opts.disc : discount;
@@ -152,19 +184,21 @@ function BillingDashboard() {
       setCurrentBill(data);
       setActiveSessionId(data.sessionId);
       setSearchTable(data.table);
+      setTenderCash(String(Math.ceil(data.total)));
       setTab("settle");
     } catch {
-      setError("Network error loading bill.");
+      setError("Network error loading table bill.");
     } finally {
       setBusy(false);
     }
   };
 
+  // Settle Bill via POST
   const handleSettleBill = async () => {
     if (!currentBill || !paymentMethod || busy) return;
     setBusy(true);
-    setError("");
-    setSuccessMsg("");
+    setError(null);
+    setSuccessMsg(null);
 
     try {
       const res = await authFetch("/api/billing", {
@@ -179,19 +213,33 @@ function BillingDashboard() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Failed to generate bill.");
+        setError(data.error ?? "Failed to process bill settlement.");
         return;
       }
 
       setSettledBill(data);
       setCurrentBill(null);
-      setSuccessMsg(`Bill #${data.billNumber} generated successfully. Table session closed.`);
+      setSuccessMsg(`Invoice #${data.billNumber} finalized. Table session closed.`);
       loadOverview();
     } catch {
-      setError("Failed to record settlement. Please verify connection.");
+      setError("Failed to record settlement. Please verify database connectivity.");
     } finally {
       setBusy(false);
     }
+  };
+
+  // Quick Preset Discounts
+  const applyPresetDiscount = (amount: number) => {
+    const safeAmount = Math.max(0, Math.min(amount, currentBill?.subtotal || 0));
+    setDiscount(String(safeAmount));
+    loadBill({ disc: String(safeAmount) });
+  };
+
+  const applyPercentDiscount = (percent: number) => {
+    if (!currentBill) return;
+    const calc = Math.round((currentBill.subtotal * (percent / 100)) * 100) / 100;
+    setDiscount(String(calc));
+    loadBill({ disc: String(calc) });
   };
 
   const resetToOverview = () => {
@@ -201,153 +249,247 @@ function BillingDashboard() {
     setActiveSessionId(null);
     setDiscount("0");
     setPaymentMethod("");
-    setError("");
-    setSuccessMsg("");
+    setTenderCash("");
+    setError(null);
+    setSuccessMsg(null);
     setTab("overview");
   };
 
   const activeDisplayBill = settledBill || currentBill;
 
+  // Filter Tables
+  const occupiedTables = overview?.tables.filter((t) => t.hasOpenSession) || [];
+  const vacantTables = overview?.tables.filter((t) => !t.hasOpenSession) || [];
+  const filteredTables = (overview?.tables || []).filter((t) => {
+    if (tableFilter === "occupied") return t.hasOpenSession;
+    if (tableFilter === "vacant") return !t.hasOpenSession;
+    return true;
+  });
+
+  // Filter History
+  const filteredHistory = (overview?.recentBills || []).filter((b) => {
+    if (!historySearch.trim()) return true;
+    const q = historySearch.toLowerCase();
+    return (
+      b.table.toLowerCase().includes(q) ||
+      String(b.billNumber).includes(q) ||
+      b.paymentMethod.toLowerCase().includes(q)
+    );
+  });
+
+  // Cash change calculation
+  const tenderNumber = parseFloat(tenderCash) || 0;
+  const cashChange = activeDisplayBill ? Math.max(0, tenderNumber - activeDisplayBill.total) : 0;
+
   return (
-    <div className="min-h-screen bg-[#F8F5EF] p-4 sm:p-6 text-[#252D38] print:bg-white print:p-0">
-      <div className="mx-auto max-w-6xl">
-        {/* Navigation Tabs */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#252D38]/10 pb-4 print:hidden">
-          <div>
-            <h1 className="text-3xl font-black text-[#193A2D]">Billing & Revenue</h1>
-            <p className="text-xs font-semibold text-[#252D38]/70 mt-0.5">
-              {overview?.restaurant.name ?? "Restaurant"} · Operations Desk
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTab("overview")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-xs ${
-                tab === "overview"
-                  ? "bg-[#193A2D] text-[#E7B94F]"
-                  : "bg-white text-[#252D38] hover:bg-stone-50 border border-[#252D38]/15"
-              }`}
-            >
-              📊 Tables & Metrics
-            </button>
-            <button
-              onClick={() => setTab("settle")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-xs ${
-                tab === "settle"
-                  ? "bg-[#193A2D] text-[#E7B94F]"
-                  : "bg-white text-[#252D38] hover:bg-stone-50 border border-[#252D38]/15"
-              }`}
-            >
-              🧾 Settle Bill {currentBill ? `(Table ${currentBill.table})` : ""}
-            </button>
-            <button
-              onClick={() => setTab("history")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-xs ${
-                tab === "history"
-                  ? "bg-[#193A2D] text-[#E7B94F]"
-                  : "bg-white text-[#252D38] hover:bg-stone-50 border border-[#252D38]/15"
-              }`}
-            >
-              📑 Bill History
-            </button>
-          </div>
-        </div>
-
-        {/* Status Alerts */}
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-xl bg-red-50 p-3.5 text-xs font-bold text-red-700 border border-red-200 print:hidden"
-          >
-            ⚠️ {error}
-          </div>
-        )}
-        {successMsg && (
-          <div
-            role="alert"
-            className="mb-4 rounded-xl bg-emerald-50 p-3.5 text-xs font-bold text-emerald-800 border border-emerald-300 print:hidden"
-          >
-            ✓ {successMsg}
-          </div>
-        )}
-
-        {/* TAB 1: OVERVIEW & ACTIVE TABLES */}
-        {tab === "overview" && (
-          <div className="space-y-6 print:hidden">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Today&apos;s Revenue
-                </span>
-                <p className="mt-2 text-2xl sm:text-3xl font-black text-[#193A2D] tabular-nums">
-                  {money(overview?.todaySummary.totalSales ?? 0)}
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-emerald-700">
-                  {overview?.todaySummary.billsCount ?? 0} bills settled today
-                </p>
+    <div className="min-h-screen bg-[#FAF7F0] p-4 sm:p-6 text-[#242B2A] print:bg-white print:p-0">
+      <div className="mx-auto max-w-7xl">
+        {/* TOP STATION HEADER & NAVIGATION */}
+        <header className="mb-6 rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury print:hidden">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#173F35] text-[#E8B95B] font-serif font-extrabold text-lg shadow-inner">
+                GE
               </div>
-
-              <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Active Dining Tables
-                </span>
-                <p className="mt-2 text-2xl sm:text-3xl font-black text-[#193A2D] tabular-nums">
-                  {overview?.tables.filter((t) => t.hasOpenSession).length ?? 0}
-                  <span className="text-base font-normal text-[#252D38]/50">
-                    {" "}
-                    / {overview?.tables.length ?? 0}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-serif font-bold text-[#173F35]">
+                    POS Billing & Settlement Desk
+                  </h1>
+                  <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                    Station Active
                   </span>
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-[#252D38]/70">
-                  Current occupied dining capacity
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Average Order Value
-                </span>
-                <p className="mt-2 text-2xl sm:text-3xl font-black text-[#193A2D] tabular-nums">
-                  {money(overview?.todaySummary.averageOrderValue ?? 0)}
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-[#252D38]/70">
-                  Average revenue per table
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Tax Collected (GST)
-                </span>
-                <p className="mt-2 text-2xl sm:text-3xl font-black text-[#193A2D] tabular-nums">
-                  {money(overview?.todaySummary.totalTax ?? 0)}
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-[#252D38]/70">
-                  Discounts given: {money(overview?.todaySummary.totalDiscounts ?? 0)}
+                </div>
+                <p className="text-xs text-[#242B2A]/60 mt-0.5">
+                  {overview?.restaurant.name ?? "Green Embassy"} • Authorized Cashier & Audit Terminal
                 </p>
               </div>
             </div>
 
-            {/* Payment Method Breakdown */}
-            <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[#252D38]/60 mb-3">
-                Payment Collection Breakdown (Today)
+            {/* Quick Cross-Portal Links & Station Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-2xl bg-[#FAF7F0] p-1 border border-[#173F35]/10 text-xs font-bold">
+                <button
+                  onClick={() => setTab("overview")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 transition-all cursor-pointer ${
+                    tab === "overview"
+                      ? "bg-[#173F35] text-[#E8B95B] shadow-luxury"
+                      : "text-[#242B2A]/70 hover:text-[#173F35]"
+                  }`}
+                >
+                  <GridIcon className="w-3.5 h-3.5" />
+                  <span>Floor & Metrics</span>
+                </button>
+
+                <button
+                  onClick={() => setTab("settle")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 transition-all cursor-pointer ${
+                    tab === "settle"
+                      ? "bg-[#173F35] text-[#E8B95B] shadow-luxury"
+                      : "text-[#242B2A]/70 hover:text-[#173F35]"
+                  }`}
+                >
+                  <ReceiptIcon className="w-3.5 h-3.5" />
+                  <span>
+                    Settle Terminal {currentBill ? `(Table ${currentBill.table})` : ""}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setTab("history")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 transition-all cursor-pointer ${
+                    tab === "history"
+                      ? "bg-[#173F35] text-[#E8B95B] shadow-luxury"
+                      : "text-[#242B2A]/70 hover:text-[#173F35]"
+                  }`}
+                >
+                  <ClockIcon className="w-3.5 h-3.5" />
+                  <span>Settled Log ({overview?.recentBills.length ?? 0})</span>
+                </button>
+              </div>
+
+              {/* Cross Portal Links */}
+              <Link
+                href="/kitchen"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/15 bg-white px-3 py-2 text-xs font-semibold text-[#173F35] hover:bg-[#FAF7F0] shadow-xs transition-colors"
+                title="Kitchen Display System"
+              >
+                <ChefHatIcon className="w-3.5 h-3.5 text-amber-700" />
+                <span>Kitchen</span>
+              </Link>
+
+              <Link
+                href="/admin"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/15 bg-white px-3 py-2 text-xs font-semibold text-[#173F35] hover:bg-[#FAF7F0] shadow-xs transition-colors"
+                title="Admin Management"
+              >
+                <span>Admin</span>
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* NOTIFICATION FEEDBACK BANNERS */}
+        {error && (
+          <div
+            role="alert"
+            className="mb-5 flex items-center justify-between rounded-2xl bg-rose-50 p-4 text-xs font-semibold text-rose-900 border border-rose-200 shadow-luxury print:hidden"
+          >
+            <div className="flex items-center gap-2.5">
+              <AlertCircleIcon className="w-4 h-4 shrink-0 text-rose-700" />
+              <span>{error}</span>
+            </div>
+            <button onClick={() => setError(null)} className="text-rose-500 hover:text-rose-800">
+              <CloseIcon className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {successMsg && (
+          <div
+            role="alert"
+            className="mb-5 flex items-center justify-between rounded-2xl bg-emerald-50 p-4 text-xs font-semibold text-emerald-950 border border-emerald-200 shadow-luxury print:hidden"
+          >
+            <div className="flex items-center gap-2.5">
+              <CheckIcon className="w-4 h-4 shrink-0 text-emerald-700" />
+              <span>{successMsg}</span>
+            </div>
+            <button onClick={() => setSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-900">
+              <CloseIcon className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 1: FLOOR OVERVIEW & ACTIVE TABLES */}
+        {/* ========================================================= */}
+        {tab === "overview" && (
+          <div className="space-y-6 print:hidden">
+            {/* 4 REVENUE & FINANCIAL KPI CARDS */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Today's Gross Revenue */}
+              <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                  Gross Revenue Today
+                </span>
+                <p className="mt-2 text-2xl sm:text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                  {money(overview?.todaySummary.totalSales ?? 0)}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-emerald-800">
+                  {overview?.todaySummary.billsCount ?? 0} settled transactions
+                </p>
+              </div>
+
+              {/* Active Dining Floor */}
+              <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                  Occupied Tables
+                </span>
+                <p className="mt-2 text-2xl sm:text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                  {occupiedTables.length}{" "}
+                  <span className="text-base font-normal text-[#242B2A]/50">
+                    / {overview?.tables.length ?? 0}
+                  </span>
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-[#242B2A]/70">
+                  {vacantTables.length} tables vacant & ready
+                </p>
+              </div>
+
+              {/* Average Order Value (AOV) */}
+              <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                  Average Bill Value
+                </span>
+                <p className="mt-2 text-2xl sm:text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                  {money(overview?.todaySummary.averageOrderValue ?? 0)}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-[#242B2A]/70">
+                  Average spend per seated table
+                </p>
+              </div>
+
+              {/* GST Tax Collected */}
+              <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                  GST Tax Collected
+                </span>
+                <p className="mt-2 text-2xl sm:text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                  {money(overview?.todaySummary.totalTax ?? 0)}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-[#242B2A]/70">
+                  Total discounts given: {money(overview?.todaySummary.totalDiscounts ?? 0)}
+                </p>
+              </div>
+            </div>
+
+            {/* PAYMENT METHOD AUDIT BREAKDOWN */}
+            <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#242B2A]/50 mb-3">
+                Verified Payment Collections (Today)
               </h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {METHODS.map((m) => {
                   const val = overview?.todaySummary.paymentBreakdown[m.id] ?? 0;
+                  const Icon = m.Icon;
+                  const totalRev = overview?.todaySummary.totalSales || 1;
+                  const pct = Math.round((val / totalRev) * 100);
+
                   return (
                     <div
                       key={m.id}
-                      className="rounded-xl bg-[#F8F5EF] p-3 border border-[#252D38]/10"
+                      className="rounded-2xl bg-[#FAF7F0] p-4 border border-[#173F35]/10 shadow-xs"
                     >
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-[#252D38]/80">
-                        <span>{m.icon}</span>
-                        <span>{m.label}</span>
+                      <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-[#173F35]" />
+                          <span className="font-bold text-[#242B2A]">{m.label}</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold text-[#173F35]/70">
+                          {pct}%
+                        </span>
                       </div>
-                      <p className="mt-1.5 text-lg font-bold text-[#193A2D] tabular-nums">
+                      <p className="text-lg font-bold text-[#173F35] tabular-nums mt-1">
                         {money(val)}
                       </p>
                     </div>
@@ -356,33 +498,69 @@ function BillingDashboard() {
               </div>
             </div>
 
-            {/* Live Table Grid */}
-            <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
+            {/* LIVE FLOOR TABLE SELECTION GRID */}
+            <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
-                  <h2 className="text-lg font-black text-[#193A2D]">
-                    Restaurant Tables Grid
+                  <h2 className="text-lg font-serif font-bold text-[#173F35]">
+                    Dining Floor Table Matrix
                   </h2>
-                  <p className="text-xs text-[#252D38]/70">
-                    Tap any occupied table to open itemized bill and settle payment
+                  <p className="text-xs text-[#242B2A]/60 mt-0.5">
+                    Click any occupied table to open itemized bill and settle payment
                   </p>
                 </div>
-                <button
-                  onClick={() => loadOverview()}
-                  className="rounded-lg border border-[#252D38]/20 bg-[#F8F5EF] px-3 py-1.5 text-xs font-bold hover:bg-[#252D38]/10"
-                >
-                  Refresh Grid
-                </button>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex rounded-xl bg-[#FAF7F0] p-1 border border-[#173F35]/10 text-xs font-bold">
+                    <button
+                      onClick={() => setTableFilter("all")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "all" ? "bg-[#173F35] text-[#E8B95B]" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      All ({overview?.tables.length ?? 0})
+                    </button>
+                    <button
+                      onClick={() => setTableFilter("occupied")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "occupied" ? "bg-[#E8B95B] text-[#173F35]" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Occupied ({occupiedTables.length})
+                    </button>
+                    <button
+                      onClick={() => setTableFilter("vacant")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "vacant" ? "bg-emerald-800 text-white" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Vacant ({vacantTables.length})
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => loadOverview()}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 py-1.5 text-xs font-semibold hover:bg-white cursor-pointer transition-colors shadow-xs"
+                  >
+                    <RefreshCwIcon className="w-3.5 h-3.5" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
               </div>
 
               {loadingOverview && (
-                <div className="py-12 text-center text-sm text-[#252D38]/60">
-                  Loading tables...
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 mb-4">
+                  <TableCardSkeleton />
+                  <TableCardSkeleton />
+                  <TableCardSkeleton />
+                  <TableCardSkeleton />
+                  <TableCardSkeleton />
+                  <TableCardSkeleton />
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {(overview?.tables ?? []).map((tbl) => {
+                {filteredTables.map((tbl) => {
                   const isOccupied = tbl.hasOpenSession;
                   const hasUnserved = tbl.unservedCount > 0;
 
@@ -396,13 +574,13 @@ function BillingDashboard() {
                       }}
                       className={`flex flex-col justify-between rounded-2xl p-4 text-left border transition-all ${
                         isOccupied
-                          ? "border-[#193A2D] bg-[#193A2D]/5 hover:bg-[#193A2D]/10 hover:shadow-md cursor-pointer"
-                          : "border-stone-200 bg-stone-50/60 opacity-60 cursor-default"
+                          ? "border-[#E8B95B] bg-gradient-to-b from-amber-50/50 to-white hover:border-[#173F35] hover:shadow-luxury-lg cursor-pointer shadow-luxury"
+                          : "border-[#173F35]/10 bg-[#FAF7F0]/60 opacity-60 cursor-default"
                       }`}
                     >
                       <div className="flex items-center justify-between w-full">
-                        <span className="text-xl font-black text-[#193A2D]">
-                          {tbl.label}
+                        <span className="text-xl font-serif font-bold text-[#173F35]">
+                          Table {tbl.label}
                         </span>
                         <span
                           className={`h-2.5 w-2.5 rounded-full ${
@@ -415,20 +593,20 @@ function BillingDashboard() {
                         />
                       </div>
 
-                      <div className="mt-3">
+                      <div className="mt-3.5 pt-2 border-t border-[#173F35]/10 w-full">
                         {isOccupied ? (
                           <>
-                            <p className="text-xs font-bold text-[#193A2D] tabular-nums">
+                            <p className="text-xs font-bold text-[#173F35] tabular-nums">
                               Est: {money(tbl.estimatedSubtotal)}
                             </p>
-                            <p className="text-[11px] font-semibold text-[#252D38]/70">
-                              {tbl.orderCount} order{tbl.orderCount !== 1 ? "s" : ""}
+                            <div className="flex items-center justify-between text-[11px] text-[#242B2A]/70 mt-0.5">
+                              <span>{tbl.orderCount} order{tbl.orderCount !== 1 ? "s" : ""}</span>
                               {hasUnserved && (
-                                <span className="block text-amber-800 font-bold">
-                                  ⏳ {tbl.unservedCount} unserved
+                                <span className="font-bold text-amber-700 text-[10px]">
+                                  {tbl.unservedCount} cooking
                                 </span>
                               )}
-                            </p>
+                            </div>
                           </>
                         ) : (
                           <p className="text-xs font-medium text-stone-500">Vacant</p>
@@ -437,21 +615,35 @@ function BillingDashboard() {
                     </button>
                   );
                 })}
+
+                {!loadingOverview && filteredTables.length === 0 && (
+                  <div className="col-span-full py-6">
+                    <EmptyState
+                      icon={GridIcon}
+                      title="No Tables in Category"
+                      description={`There are currently no dining tables matching the "${tableFilter}" filter status.`}
+                      actionLabel="Show All Tables"
+                      onAction={() => setTableFilter("all")}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: SETTLE BILL & PRINTABLE RECEIPT */}
+        {/* ========================================================= */}
+        {/* TAB 2: ACTIVE SETTLEMENT TERMINAL & RECEIPT PREVIEW */}
+        {/* ========================================================= */}
         {tab === "settle" && (
           <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-            {/* Left Column: Table Finder & Payment Form */}
-            <div className="space-y-5 print:hidden">
-              {/* Table Search Header */}
-              <div className="rounded-2xl bg-white p-5 border border-[#252D38]/10 shadow-xs">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#193A2D] mb-3">
-                  Find Table Bill
-                </h2>
+            {/* Left Column: Settlement Controls & Calculator */}
+            <div className="space-y-6 print:hidden">
+              {/* Find Table Search Bar */}
+              <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#173F35]/60 mb-2 block">
+                  Table Lookup
+                </span>
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -461,309 +653,398 @@ function BillingDashboard() {
                   }}
                   className="flex gap-2"
                 >
-                  <input
-                    type="text"
-                    value={searchTable}
-                    onChange={(e) => setSearchTable(e.target.value)}
-                    placeholder="Enter table label (e.g. T1, Table 2)"
-                    className="h-12 min-w-0 flex-1 rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-base font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={searchTable}
+                      onChange={(e) => setSearchTable(e.target.value)}
+                      placeholder="Enter Table Label (e.g. T1, T4, Outdoor-2)..."
+                      className="h-12 w-full rounded-2xl border border-[#173F35]/15 bg-[#FAF7F0] px-4 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all pl-10"
+                    />
+                    <SearchIcon className="w-4 h-4 text-stone-400 absolute left-3.5 top-4" />
+                  </div>
+
                   <button
                     type="submit"
                     disabled={busy || !searchTable.trim()}
-                    className="h-12 rounded-xl bg-[#193A2D] px-5 font-bold text-sm text-[#E7B94F] shadow-xs hover:bg-[#122b21] disabled:opacity-50 transition-all"
+                    className="h-12 rounded-2xl bg-[#173F35] px-6 font-bold text-xs text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer"
                   >
                     {busy ? "Loading..." : "Load Bill"}
                   </button>
                 </form>
               </div>
 
-              {/* Settlement Form (if bill loaded and not yet closed) */}
+              {/* Settlement Configuration Card */}
               {currentBill && (
-                <div className="rounded-2xl bg-white p-6 border border-[#252D38]/10 shadow-sm space-y-5">
-                  <h2 className="text-base font-bold text-[#193A2D]">
-                    Bill Settlement: Table {currentBill.table}
-                  </h2>
+                <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury space-y-6">
+                  {/* Table Header */}
+                  <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-4">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#173F35]/60">
+                        Active Dining Session
+                      </span>
+                      <h2 className="text-2xl font-serif font-bold text-[#173F35]">
+                        Table {currentBill.table}
+                      </h2>
+                    </div>
 
-                  {/* Unserved warning banner */}
+                    <div className="text-right">
+                      <span className="text-[11px] font-mono text-[#242B2A]/50 block">
+                        Session: {currentBill.sessionId.slice(0, 8)}...
+                      </span>
+                      <span className="text-xs font-bold text-emerald-800">
+                        {currentBill.lines.length} items ordered
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Kitchen Unserved Notice */}
                   {currentBill.notServed > 0 && (
-                    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 font-semibold">
-                      ⚠️ <b>Notice:</b> {currentBill.notServed} order(s) for this table have not been marked as served by the kitchen.
+                    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 font-semibold flex items-center gap-2.5">
+                      <AlertCircleIcon className="w-4 h-4 shrink-0 text-amber-700" />
+                      <span>
+                        <b>Kitchen Warning:</b> {currentBill.notServed} order(s) for this table are still marked as in-kitchen / preparing.
+                      </span>
                     </div>
                   )}
 
-                  {/* Discount adjustment */}
+                  {/* Discount Section */}
                   <div>
                     <label
                       htmlFor={discountInputId}
-                      className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1"
+                      className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-2"
                     >
-                      Discount Amount (₹)
+                      Promotional Discount
                     </label>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                      <button
+                        type="button"
+                        onClick={() => applyPresetDiscount(0)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer ${
+                          discount === "0"
+                            ? "bg-[#173F35] text-[#E8B95B] border-[#173F35]"
+                            : "bg-[#FAF7F0] text-[#242B2A]/70 border-[#173F35]/15"
+                        }`}
+                      >
+                        None (₹0)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPresetDiscount(50)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-bold bg-[#FAF7F0] text-[#242B2A]/70 border border-[#173F35]/15 hover:bg-white cursor-pointer"
+                      >
+                        −₹50
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPresetDiscount(100)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-bold bg-[#FAF7F0] text-[#242B2A]/70 border border-[#173F35]/15 hover:bg-white cursor-pointer"
+                      >
+                        −₹100
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPercentDiscount(5)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-bold bg-[#FAF7F0] text-[#242B2A]/70 border border-[#173F35]/15 hover:bg-white cursor-pointer"
+                      >
+                        5% Off
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPercentDiscount(10)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-bold bg-[#FAF7F0] text-[#242B2A]/70 border border-[#173F35]/15 hover:bg-white cursor-pointer"
+                      >
+                        10% Off
+                      </button>
+                    </div>
+
                     <div className="flex gap-2">
-                      <input
-                        id={discountInputId}
-                        type="number"
-                        min="0"
-                        max={currentBill.subtotal}
-                        step="1"
-                        value={discount}
-                        onChange={(e) => setDiscount(e.target.value)}
-                        className="h-11 w-36 rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3 text-right font-bold tabular-nums text-base focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                      />
+                      <div className="relative w-40">
+                        <span className="absolute left-3.5 top-2.5 text-sm font-bold text-[#242B2A]/60">₹</span>
+                        <input
+                          id={discountInputId}
+                          type="number"
+                          min="0"
+                          max={currentBill.subtotal}
+                          step="1"
+                          value={discount}
+                          onChange={(e) => setDiscount(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] pl-8 pr-3 text-right font-bold tabular-nums text-sm focus:border-[#173F35] focus:bg-white focus:outline-none"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => loadBill({ disc: discount })}
-                        className="h-11 rounded-xl border border-[#252D38]/20 bg-stone-50 px-4 text-xs font-bold hover:bg-stone-100"
+                        className="h-11 rounded-xl border border-[#173F35]/20 bg-stone-50 px-4 text-xs font-semibold hover:bg-stone-100 cursor-pointer"
                       >
-                        Apply Discount
+                        Recalculate
                       </button>
                     </div>
                   </div>
 
                   {/* Payment Method Selector */}
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-2">
-                      Select Payment Method
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-2">
+                      Select Payment Mode *
                     </label>
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                      {METHODS.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => setPaymentMethod(m.id)}
-                          className={`flex flex-col items-center justify-center rounded-xl p-3 border text-xs font-bold transition-all shadow-xs ${
-                            paymentMethod === m.id
-                              ? "border-[#193A2D] bg-[#193A2D] text-[#E7B94F]"
-                              : "border-[#252D38]/20 bg-[#F8F5EF] text-[#252D38] hover:bg-stone-100"
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{m.icon}</span>
-                          <span>{m.label}</span>
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {METHODS.map((m) => {
+                        const Icon = m.Icon;
+                        const isSelected = paymentMethod === m.id;
+
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setPaymentMethod(m.id);
+                              if (m.id === "cash" && currentBill) {
+                                setTenderCash(String(Math.ceil(currentBill.total)));
+                              }
+                            }}
+                            className={`flex flex-col items-center justify-center rounded-2xl p-3.5 border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                              isSelected
+                                ? "border-[#173F35] bg-[#173F35] text-[#E8B95B] shadow-luxury"
+                                : "border-[#173F35]/15 bg-[#FAF7F0] text-[#242B2A] hover:bg-white"
+                            }`}
+                          >
+                            <Icon
+                              className={`w-6 h-6 mb-1.5 ${
+                                isSelected ? "text-[#E8B95B]" : "text-[#173F35]"
+                              }`}
+                            />
+                            <span>{m.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  {/* Action Button */}
+                  {/* Cash Drawer Calculator (If Cash selected) */}
+                  {paymentMethod === "cash" && (
+                    <div className="rounded-2xl bg-[#FAF7F0] p-4 border border-[#173F35]/15 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#173F35]">
+                          Cash Tender & Change
+                        </span>
+                        <span className="text-xs text-[#242B2A]/60">
+                          Bill Total: <b>{money(currentBill.total)}</b>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-40">
+                          <span className="absolute left-3.5 top-2 text-sm font-bold text-[#242B2A]/60">₹</span>
+                          <input
+                            type="number"
+                            min={currentBill.total}
+                            value={tenderCash}
+                            onChange={(e) => setTenderCash(e.target.value)}
+                            placeholder="Cash Received"
+                            className="h-10 w-full rounded-xl border border-[#173F35]/15 bg-white pl-8 pr-3 font-bold text-sm text-[#173F35] focus:outline-none focus:border-[#173F35]"
+                          />
+                        </div>
+
+                        <div className="flex-1 text-right">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/50 block">
+                            Change to Return
+                          </span>
+                          <span className="text-lg font-bold font-serif text-emerald-800 tabular-nums">
+                            {money(cashChange)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Primary Settlement Button */}
                   <button
                     onClick={handleSettleBill}
                     disabled={busy || !paymentMethod}
-                    className="h-14 w-full rounded-xl bg-[#193A2D] text-base font-bold text-[#E7B94F] shadow-lg hover:bg-[#122b21] disabled:opacity-40 transition-all cursor-pointer"
+                    className="h-14 w-full rounded-2xl bg-[#173F35] text-base font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
-                    {busy
-                      ? "Recording Settlement..."
-                      : `Settle & Close Table (${money(currentBill.total)})`}
+                    {busy ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#E8B95B] border-t-transparent" />
+                        Recording Settle RPC...
+                      </span>
+                    ) : (
+                      <>
+                        <CheckIcon className="w-5 h-5 text-[#E8B95B]" />
+                        <span>Settle & Close Table ({money(currentBill.total)})</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
 
-              {/* Success / Next table button */}
+              {/* Settlement Success Dialog */}
               {settledBill && (
-                <div className="rounded-2xl bg-white p-6 border border-emerald-300 shadow-sm text-center space-y-4">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-2xl font-bold">
-                    ✓
+                <div className="rounded-3xl bg-white p-8 border border-emerald-300 shadow-luxury text-center space-y-4">
+                  <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-100 text-emerald-800 text-3xl font-bold shadow-inner">
+                    <CheckIcon className="w-8 h-8" />
                   </div>
+
                   <div>
-                    <h3 className="text-xl font-bold text-[#193A2D]">
-                      Table Settled Successfully
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-0.5 rounded-full inline-block mb-1.5">
+                      Session Settled
+                    </span>
+                    <h3 className="text-2xl font-serif font-bold text-[#173F35]">
+                      Invoice #{settledBill.billNumber} Finalized
                     </h3>
-                    <p className="text-xs text-[#252D38]/70 mt-1">
-                      Bill #{settledBill.billNumber} created. Session closed and table is now vacant.
+                    <p className="text-xs text-[#242B2A]/70 mt-1 max-w-sm mx-auto">
+                      Table {settledBill.table} has been successfully closed. Customer receipt is generated and ready for thermal printing.
                     </p>
                   </div>
-                  <div className="flex justify-center gap-3">
+
+                  <div className="flex flex-wrap justify-center gap-3 pt-2">
                     <button
                       onClick={() => window.print()}
-                      className="h-11 rounded-xl bg-[#193A2D] px-6 text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21]"
+                      className="inline-flex items-center gap-1.5 h-11 rounded-2xl bg-[#173F35] px-6 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer transition-colors"
                     >
-                      🖨️ Print Customer Invoice
+                      <PrinterIcon className="w-4 h-4" />
+                      <span>Print Customer Receipt</span>
                     </button>
+
                     <button
                       onClick={resetToOverview}
-                      className="h-11 rounded-xl border border-[#252D38]/20 bg-stone-50 px-6 text-xs font-bold text-[#252D38] hover:bg-stone-100"
+                      className="inline-flex items-center gap-1.5 h-11 rounded-2xl border border-[#173F35]/20 bg-[#FAF7F0] px-6 text-xs font-bold text-[#173F35] hover:bg-white cursor-pointer transition-colors"
                     >
-                      Next Table →
+                      <span>Settle Next Table</span>
+                      <ArrowRightIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
               )}
+
+              {!currentBill && !settledBill && (
+                <div className="rounded-3xl border border-dashed border-[#173F35]/20 bg-white/50 p-12 text-center text-sm text-[#242B2A]/50 shadow-luxury">
+                  <ReceiptIcon className="w-10 h-10 text-[#173F35]/30 mx-auto mb-2" />
+                  <p className="font-serif font-bold text-[#173F35]">No Table Selected</p>
+                  <p className="text-xs text-[#242B2A]/60 mt-1">
+                    Select an occupied table from Floor Overview or enter a table label above.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Right Column: Thermal Receipt Preview / Printable Invoice */}
+            {/* Right Column: Thermal Receipt Preview */}
             <div>
               {activeDisplayBill ? (
-                <div className="rounded-3xl border border-[#252D38]/15 bg-white p-6 shadow-xl print:border-0 print:p-0">
-                  <div className="flex items-center justify-between border-b border-[#252D38]/10 pb-3 mb-4 print:hidden">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#193A2D]">
-                      Invoice Preview
-                    </span>
-                    <button
-                      onClick={() => window.print()}
-                      className="rounded-lg bg-[#193A2D] px-3 py-1.5 text-xs font-bold text-[#E7B94F]"
-                    >
-                      🖨️ Print
-                    </button>
-                  </div>
-
-                  {/* Standard Restaurant 80mm Thermal Receipt */}
-                  <div className="font-mono text-xs text-[#252D38] leading-tight space-y-3">
-                    <div className="text-center space-y-1">
-                      <p className="text-base font-bold uppercase tracking-wide">
-                        {activeDisplayBill.restaurant}
-                      </p>
-                      {activeDisplayBill.gstin && (
-                        <p className="text-[11px] text-[#252D38]/70">
-                          GSTIN: {activeDisplayBill.gstin}
-                        </p>
-                      )}
-                      <p className="text-sm font-bold">
-                        Table {activeDisplayBill.table}
-                      </p>
-                      {activeDisplayBill.billNumber && (
-                        <p className="font-bold">
-                          TAX INVOICE #{activeDisplayBill.billNumber}
-                        </p>
-                      )}
-                      <p className="text-[11px] text-[#252D38]/60">
-                        Date: {new Date().toLocaleString("en-IN")}
-                      </p>
-                    </div>
-
-                    <div className="border-t border-dashed border-[#252D38]/40 pt-2 pb-1">
-                      <div className="flex justify-between font-bold text-[11px] mb-1">
-                        <span>ITEM / QTY</span>
-                        <span>AMOUNT</span>
-                      </div>
-                      <ul className="space-y-1">
-                        {activeDisplayBill.lines.map((l: BillLine, i: number) => (
-                          <li key={i} className="flex justify-between">
-                            <span className="truncate pr-2">
-                              {l.qty} × {l.name}
-                            </span>
-                            <span className="shrink-0 tabular-nums">
-                              {money(l.total)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="border-t border-dashed border-[#252D38]/40 pt-2 space-y-1 tabular-nums">
-                      <div className="flex justify-between">
-                        <span>Subtotal</span>
-                        <span>{money(activeDisplayBill.subtotal)}</span>
-                      </div>
-                      {activeDisplayBill.discount > 0 && (
-                        <div className="flex justify-between text-emerald-800">
-                          <span>Discount</span>
-                          <span>−{money(activeDisplayBill.discount)}</span>
-                        </div>
-                      )}
-                      {activeDisplayBill.servicePercent > 0 && (
-                        <div className="flex justify-between">
-                          <span>Service Charge ({activeDisplayBill.servicePercent}%)</span>
-                          <span>{money(activeDisplayBill.service)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span>GST ({activeDisplayBill.taxPercent}%)</span>
-                        <span>{money(activeDisplayBill.tax)}</span>
-                      </div>
-                    </div>
-
-                    <div className="border-t-2 border-[#252D38] pt-2 flex justify-between text-base font-black tabular-nums">
-                      <span>TOTAL PAYABLE</span>
-                      <span>{money(activeDisplayBill.total)}</span>
-                    </div>
-
-                    {activeDisplayBill.paymentMethod && (
-                      <div className="border-t border-dashed border-[#252D38]/40 pt-2 text-center font-bold uppercase text-[11px]">
-                        PAID VIA: {activeDisplayBill.paymentMethod}
-                      </div>
-                    )}
-
-                    <div className="text-center pt-3 text-[11px] text-[#252D38]/60 border-t border-dashed border-[#252D38]/40">
-                      <p>Thank you for dining with us!</p>
-                      <p>Have a wonderful day.</p>
-                    </div>
-                  </div>
-                </div>
+                <ReceiptPreview
+                  bill={activeDisplayBill}
+                  onPrint={() => window.print()}
+                  isSettled={!!settledBill}
+                />
               ) : (
-                <div className="rounded-3xl border border-dashed border-[#252D38]/20 bg-white/50 p-12 text-center text-sm text-[#252D38]/50 print:hidden">
-                  <span className="text-3xl block mb-2">🧾</span>
-                  Select an active dining table or enter a table label to generate the invoice preview.
+                <div className="rounded-3xl border border-dashed border-[#173F35]/20 bg-white/40 p-12 text-center text-xs text-[#242B2A]/50 shadow-luxury print:hidden">
+                  <SparklesIcon className="w-8 h-8 text-[#E8B95B] mx-auto mb-2 opacity-50" />
+                  <p className="font-serif font-semibold text-[#173F35]">Interactive Invoice Preview</p>
+                  <p className="mt-1 text-[11px] text-[#242B2A]/60">
+                    Live 80mm thermal receipt will render here once a table is selected.
+                  </p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* TAB 3: BILL HISTORY */}
+        {/* ========================================================= */}
+        {/* TAB 3: BILL SETTLEMENT HISTORY & AUDIT LOG */}
+        {/* ========================================================= */}
         {tab === "history" && (
-          <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm print:hidden">
-            <div className="flex items-center justify-between mb-4">
+          <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury print:hidden space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-black text-[#193A2D]">
+                <h2 className="text-lg font-serif font-bold text-[#173F35]">
                   Today&apos;s Settled Bills ({overview?.recentBills.length ?? 0})
                 </h2>
-                <p className="text-xs text-[#252D38]/70">
-                  Complete audit log of finalized receipts and settlements
+                <p className="text-xs text-[#242B2A]/60 mt-0.5">
+                  Complete authoritative audit ledger of finalized dining settlements
                 </p>
               </div>
-              <button
-                onClick={() => loadOverview()}
-                className="rounded-lg border border-[#252D38]/20 bg-[#F8F5EF] px-3 py-1.5 text-xs font-bold hover:bg-[#252D38]/10"
-              >
-                Refresh Log
-              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search by Bill # or Table..."
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    className="h-10 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-semibold focus:border-[#173F35] focus:outline-none w-56 pl-8"
+                  />
+                  <SearchIcon className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-3.5" />
+                </div>
+
+                <button
+                  onClick={() => loadOverview()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 py-2 text-xs font-semibold hover:bg-white cursor-pointer transition-colors"
+                >
+                  <RefreshCwIcon className="w-3.5 h-3.5" />
+                  <span>Refresh</span>
+                </button>
+              </div>
             </div>
 
-            {(overview?.recentBills.length ?? 0) === 0 ? (
-              <p className="py-12 text-center text-sm text-[#252D38]/50">
-                No bills settled yet today.
-              </p>
+            {filteredHistory.length === 0 ? (
+              <div className="py-6">
+                <EmptyState
+                  icon={ReceiptIcon}
+                  title="No Invoices Found"
+                  description={
+                    historySearch
+                      ? `No settled bills matched your search for "${historySearch}".`
+                      : "No completed billing records have been settled yet today."
+                  }
+                  actionLabel={historySearch ? "Clear Filter" : undefined}
+                  onAction={historySearch ? () => setHistorySearch("") : undefined}
+                />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="border-b border-[#252D38]/15 text-[#252D38]/60 font-bold uppercase tracking-wider">
+                  <thead className="border-b border-[#173F35]/15 bg-[#FAF7F0] text-[#242B2A]/60 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="py-2.5 pr-3">Bill #</th>
-                      <th className="py-2.5 px-3">Table</th>
-                      <th className="py-2.5 px-3">Time</th>
-                      <th className="py-2.5 px-3">Payment</th>
-                      <th className="py-2.5 px-3 text-right">Subtotal</th>
-                      <th className="py-2.5 px-3 text-right">Discount</th>
-                      <th className="py-2.5 px-3 text-right">Tax</th>
-                      <th className="py-2.5 pl-3 text-right">Final Total</th>
+                      <th className="py-3 px-4">Invoice #</th>
+                      <th className="py-3 px-4">Table</th>
+                      <th className="py-3 px-4">Settled At</th>
+                      <th className="py-3 px-4">Payment Mode</th>
+                      <th className="py-3 px-4 text-right">Subtotal</th>
+                      <th className="py-3 px-4 text-right">Discount</th>
+                      <th className="py-3 px-4 text-right">GST</th>
+                      <th className="py-3 px-4 text-right">Final Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#252D38]/10 font-medium">
-                    {overview?.recentBills.map((b) => (
-                      <tr key={b.id} className="hover:bg-stone-50">
-                        <td className="py-3 pr-3 font-bold text-[#193A2D]">
+                  <tbody className="divide-y divide-[#173F35]/10 font-medium">
+                    {filteredHistory.map((b) => (
+                      <tr key={b.id} className="hover:bg-[#FAF7F0]/60 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-[#173F35]">
                           #{b.billNumber}
                         </td>
-                        <td className="py-3 px-3 font-semibold">Table {b.table}</td>
-                        <td className="py-3 px-3 text-[#252D38]/70">
+                        <td className="py-3 px-4 font-semibold">Table {b.table}</td>
+                        <td className="py-3 px-4 text-[#242B2A]/70 text-[11px]">
                           {new Date(b.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </td>
-                        <td className="py-3 px-3 uppercase text-[11px] font-bold text-[#193A2D]">
-                          {b.paymentMethod}
+                        <td className="py-3 px-4">
+                          <span className="rounded-md bg-[#173F35]/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[#173F35]">
+                            {b.paymentMethod}
+                          </span>
                         </td>
-                        <td className="py-3 px-3 text-right tabular-nums">
+                        <td className="py-3 px-4 text-right tabular-nums">
                           {money(b.subtotal)}
                         </td>
-                        <td className="py-3 px-3 text-right tabular-nums text-emerald-800">
+                        <td className="py-3 px-4 text-right tabular-nums text-emerald-800">
                           {b.discount > 0 ? `−${money(b.discount)}` : "—"}
                         </td>
-                        <td className="py-3 px-3 text-right tabular-nums">
+                        <td className="py-3 px-4 text-right tabular-nums">
                           {money(b.tax)}
                         </td>
-                        <td className="py-3 pl-3 text-right font-black tabular-nums text-[#193A2D] text-sm">
+                        <td className="py-3 px-4 text-right font-serif font-bold tabular-nums text-[#173F35] text-sm">
                           {money(b.total)}
                         </td>
                       </tr>

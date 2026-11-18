@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { BellIcon, CheckIcon } from "@/components/ui/icons";
 
 export default function CallWaiter({
   token,
@@ -54,25 +55,29 @@ export default function CallWaiter({
     <button
       onClick={call}
       disabled={busy || called}
-      aria-label={called ? "Waiter has been called" : "Call waiter to table"}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all shadow-sm ${
+      aria-label={called ? "Waitstaff has been notified" : "Call waitstaff to table"}
+      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer shadow-sm ${
         called
-          ? "bg-[#193A2D]/15 text-[#193A2D] border border-[#193A2D]/30"
-          : "bg-[#193A2D] text-[#F8F5EF] hover:bg-[#122b21] active:scale-95"
+          ? "bg-[#E8B95B]/20 text-[#E8B95B] border border-[#E8B95B]/50 cursor-default"
+          : "bg-white/10 text-white hover:bg-white/20 hover:text-[#E8B95B] border border-white/20 active:scale-95"
       }`}
     >
-      <span
-        className={`h-2 w-2 rounded-full ${
-          called ? "bg-amber-500 animate-pulse" : "bg-[#E7B94F]"
-        }`}
-      />
-      {called
-        ? "Waiter Notified"
-        : busy
-        ? "Calling..."
-        : failed
-        ? "Retry Call"
-        : "Call Waiter"}
+      {called ? (
+        <>
+          <CheckIcon className="w-3.5 h-3.5 text-[#E8B95B]" />
+          <span>Staff Notified</span>
+        </>
+      ) : busy ? (
+        <>
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          <span>Calling...</span>
+        </>
+      ) : (
+        <>
+          <BellIcon className="w-3.5 h-3.5 text-[#E8B95B]" />
+          <span>{failed ? "Retry Call" : "Call Staff"}</span>
+        </>
+      )}
     </button>
   );
 }

@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  PencilIcon,
+  CloseIcon,
+  PlusIcon,
+  MinusIcon,
+  ClockIcon,
+  AlertCircleIcon,
+} from "@/components/ui/icons";
 
 export type EditableOrder = {
   id: string;
@@ -42,10 +50,10 @@ export function ChangeButton({
   return (
     <button
       onClick={onOpen}
-      className="inline-flex items-center gap-1.5 shrink-0 rounded-full border border-[#193A2D] bg-[#193A2D]/10 px-3 py-1 text-xs font-semibold tabular-nums text-[#193A2D] hover:bg-[#193A2D]/20 active:scale-95 transition-all"
+      className="inline-flex items-center gap-1.5 shrink-0 rounded-full border border-[#E8B95B]/40 bg-[#E8B95B]/15 px-3 py-1 text-xs font-semibold tabular-nums text-[#173F35] hover:bg-[#E8B95B]/25 active:scale-95 transition-all cursor-pointer shadow-xs"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[#E7B94F] animate-ping" />
-      Edit · {clock(left)}
+      <PencilIcon className="w-3 h-3 text-[#173F35]" />
+      <span>Edit &middot; {clock(left)}</span>
     </button>
   );
 }
@@ -133,61 +141,64 @@ export function OrderEditor({
       aria-modal="true"
       aria-label="Modify your placed order"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-[#F8F5EF] p-6 text-[#252D38] shadow-2xl">
-        <div className="mb-4 flex items-center justify-between border-b border-[#252D38]/10 pb-3">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-[#FAF7F0] p-6 text-[#242B2A] shadow-2xl border border-[#173F35]/10">
+        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-300 sm:hidden" />
+        <div className="mb-4 flex items-center justify-between border-b border-[#173F35]/10 pb-3">
           <div>
-            <h2 className="text-xl font-bold text-[#193A2D]">Modify Order</h2>
-            <p className="text-xs text-[#252D38]/70 mt-0.5">
+            <h2 className="font-serif text-xl font-semibold text-[#173F35]">Modify Order</h2>
+            <p className="text-xs text-[#242B2A]/70 mt-0.5 flex items-center gap-1.5 font-sans">
               {open ? (
                 <span>
-                  Change window active: <b className="text-[#193A2D] tabular-nums font-semibold">{clock(left)}</b> remaining
+                  Change window active: <b className="text-[#173F35] tabular-nums font-semibold">{clock(left)}</b> remaining
                 </span>
               ) : (
-                <span className="text-red-700 font-semibold">Change window expired</span>
+                <span className="text-rose-700 font-semibold flex items-center gap-1">
+                  <ClockIcon className="w-3.5 h-3.5" /> Change window expired
+                </span>
               )}
             </p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#252D38]/5 text-2xl text-[#252D38]/70 hover:bg-[#252D38]/10"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#173F35]/5 text-[#242B2A]/70 hover:bg-[#173F35]/10 cursor-pointer transition-colors"
           >
-            ×
+            <CloseIcon className="w-5 h-5" />
           </button>
         </div>
 
-        <ul className="divide-y divide-[#252D38]/10 mb-4">
+        <ul className="divide-y divide-[#173F35]/10 mb-4 font-sans">
           {order.order_items.map((i) => {
             const q = qty[i.id] ?? 0;
             return (
               <li key={i.id} className="py-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span
-                    className={`min-w-0 flex-1 font-semibold text-sm ${
-                      q === 0 ? "text-[#252D38]/40 line-through" : "text-[#252D38]"
+                    className={`min-w-0 flex-1 font-medium text-sm ${
+                      q === 0 ? "text-[#242B2A]/40 line-through" : "text-[#242B2A]"
                     }`}
                   >
                     {i.name_snapshot}
                   </span>
-                  <div className="flex items-center gap-1.5 rounded-lg border border-[#252D38]/20 bg-white p-1">
+                  <div className="flex items-center gap-1.5 rounded-lg border border-[#173F35]/20 bg-white p-1 shadow-xs">
                     <button
                       disabled={!open}
                       aria-label={`Reduce ${i.name_snapshot}`}
                       onClick={() => step(i.id, -1)}
-                      className="h-8 w-8 rounded text-lg font-bold text-[#193A2D] hover:bg-[#193A2D]/10 disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded text-base font-bold text-[#173F35] hover:bg-[#173F35]/10 disabled:opacity-30 cursor-pointer transition-colors"
                     >
-                      −
+                      <MinusIcon className="w-3.5 h-3.5" />
                     </button>
-                    <span className="w-6 text-center font-bold tabular-nums text-sm">
+                    <span className="w-6 text-center font-semibold tabular-nums text-sm text-[#173F35]">
                       {q}
                     </span>
                     <button
                       disabled={!open}
                       aria-label={`Add ${i.name_snapshot}`}
                       onClick={() => step(i.id, 1)}
-                      className="h-8 w-8 rounded text-lg font-bold text-[#193A2D] hover:bg-[#193A2D]/10 disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded text-base font-bold text-[#173F35] hover:bg-[#173F35]/10 disabled:opacity-30 cursor-pointer transition-colors"
                     >
-                      +
+                      <PlusIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -200,9 +211,9 @@ export function OrderEditor({
                     onChange={(e) =>
                       setNotes((n) => ({ ...n, [i.id]: e.target.value }))
                     }
-                    placeholder="Preparation note for kitchen"
+                    placeholder="Preparation note for culinary team"
                     aria-label={`Note for ${i.name_snapshot}`}
-                    className="mt-2.5 h-10 w-full rounded-lg border border-[#252D38]/20 bg-white px-3 text-sm focus:border-[#193A2D] focus:outline-none"
+                    className="mt-2.5 h-10 w-full rounded-xl border border-[#173F35]/15 bg-white px-3.5 text-xs text-[#242B2A] placeholder:text-[#242B2A]/40 focus:border-[#173F35] focus:ring-1 focus:ring-[#173F35] focus:outline-none transition-all"
                   />
                 )}
               </li>
@@ -211,16 +222,17 @@ export function OrderEditor({
         </ul>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-            {error}
+          <div className="mb-4 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-semibold text-rose-800 flex items-center gap-2">
+            <AlertCircleIcon className="w-4 h-4 shrink-0 text-rose-700" />
+            <span>{error}</span>
           </div>
         )}
 
-        <div className="space-y-2.5">
+        <div className="space-y-2.5 font-sans">
           <button
             onClick={() => send("edit")}
             disabled={!open || busy || !changed}
-            className="h-12 w-full rounded-xl bg-[#193A2D] font-bold text-[#F8F5EF] shadow-md hover:bg-[#122b21] disabled:opacity-40 transition-all"
+            className="h-12 w-full rounded-xl bg-[#173F35] font-semibold text-[#FAF7F0] shadow-luxury hover:bg-[#102e26] hover:text-[#E8B95B] disabled:opacity-40 transition-all cursor-pointer"
           >
             {busy
               ? "Updating..."
@@ -234,7 +246,7 @@ export function OrderEditor({
               confirmingCancel ? send("cancel") : setConfirmingCancel(true)
             }
             disabled={!open || busy}
-            className="h-12 w-full rounded-xl border-2 border-red-700 font-bold text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
+            className="h-12 w-full rounded-xl border border-rose-300 bg-rose-50/50 font-semibold text-rose-800 hover:bg-rose-100/70 disabled:opacity-40 transition-all cursor-pointer"
           >
             {confirmingCancel
               ? "Confirm: Yes, Cancel Order"
@@ -243,7 +255,7 @@ export function OrderEditor({
 
           <button
             onClick={onClose}
-            className="h-11 w-full rounded-xl font-semibold text-[#252D38]/70 hover:text-[#252D38]"
+            className="h-11 w-full rounded-xl font-medium text-xs text-[#242B2A]/70 hover:text-[#242B2A] hover:bg-[#173F35]/5 cursor-pointer transition-colors"
           >
             Keep Order Unchanged
           </button>

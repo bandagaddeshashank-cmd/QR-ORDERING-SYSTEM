@@ -1,62 +1,62 @@
 "use client";
 
 import { useEffect, useState, useTransition, useCallback } from "react";
-import Image from "next/image";
 import AdminGate from "./AdminGate";
+import AdminSidebar from "./AdminSidebar";
+import MenuThumbnail from "./MenuThumbnail";
+import {
+  PaymentBreakdownChart,
+  CategorySalesBarChart,
+  TableRevenueMatrixChart,
+} from "./AdminCharts";
+import {
+  DishModal,
+  TableModal,
+  QrModal,
+  ConfirmDialog,
+  PrintSheetModal,
+  type ConfirmState,
+} from "./AdminModals";
 import { authFetch } from "@/lib/authFetch";
-import type { Restaurant, MenuItem, PaymentMethod } from "@/lib/types";
+import { EmptyState } from "@/components/ui/EmptyState";
+import type { Restaurant, MenuItem } from "@/lib/types";
+import type { AdminTab, TableData, ReportData, DishFormData, ToastNotification } from "./types";
 import QRCode from "qrcode";
-
-type AdminTab = "overview" | "menu" | "tables" | "reports";
-
-type TableData = {
-  id: string;
-  label: string;
-  qr_token: string;
-  hasOpenSession: boolean;
-  sessionId: string | null;
-  qrUrl: string;
-};
-
-type ReportData = {
-  range: string;
-  summary: {
-    totalSales: number;
-    billsCount: number;
-    averageBillValue: number;
-    totalTax: number;
-    totalDiscount: number;
-    totalService: number;
-    cancelledOrdersCount: number;
-  };
-  paymentBreakdown: Record<PaymentMethod, number>;
-  popularItems: { name: string; quantity: number; revenue: number }[];
-  categorySales: { category: string; quantity: number; revenue: number }[];
-  tableUtilization: { label: string; count: number; total: number }[];
-  recentBills: {
-    id: string;
-    billNumber: number;
-    total: number;
-    discount: number;
-    tax: number;
-    paymentMethod: string;
-    tableLabel: string;
-    createdAt: string;
-  }[];
-};
+import {
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  PrinterIcon,
+  DownloadIcon,
+  CheckIcon,
+  AlertCircleIcon,
+  QrCodeIcon,
+  MenuBarsIcon,
+  RefreshCwIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  SparklesIcon,
+  TrendingUpIcon,
+  ReceiptIcon,
+  CloseIcon,
+} from "@/components/ui/icons";
+import { DietaryBadge } from "@/components/ui/Badge";
 
 export default function AdminPage() {
   return (
     <AdminGate>
-      <AdminContent />
+      <AdminDashboard />
     </AdminGate>
   );
 }
 
-function AdminContent() {
+function AdminDashboard() {
+  // Navigation & Layout State
   const [tab, setTab] = useState<AdminTab>("overview");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastNotification | null>(null);
 
   // Overview / Settings State
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -67,6 +67,7 @@ function AdminContent() {
     billsToday: number;
     salesToday: number;
   } | null>(null);
+
   const [settingsForm, setSettingsForm] = useState({
     name: "",
     gstin: "",
@@ -74,17 +75,17 @@ function AdminContent() {
     service_charge_percent: 0,
     cancel_window_seconds: 120,
   });
-  const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPendingSettings, startTransitionSettings] = useTransition();
 
   // Menu State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuSearch, setMenuSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [vegFilter, setVegFilter] = useState<"all" | "veg" | "non-veg">("all");
-  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [isAddMenuModalOpen, setIsAddMenuModalOpen] = useState(false);
-  const [dishForm, setDishForm] = useState({
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [isDishSubmitting, setIsDishSubmitting] = useState(false);
+  const [dishForm, setDishForm] = useState<DishFormData>({
     name: "",
     category: "Main Course",
     price: 150,
@@ -93,20 +94,51 @@ function AdminContent() {
     sort_order: 0,
   });
 
-  // Tables State
+  // Tables & QR State
   const [tables, setTables] = useState<TableData[]>([]);
+  const [tableFilter, setTableFilter] = useState<"all" | "occupied" | "vacant">("all");
   const [isAddTableModalOpen, setIsAddTableModalOpen] = useState(false);
   const [newTableLabel, setNewTableLabel] = useState("");
+  const [isTableSubmitting, setIsTableSubmitting] = useState(false);
   const [selectedTableForQr, setSelectedTableForQr] = useState<TableData | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [isPrintAllMode, setIsPrintAllMode] = useState(false);
   const [allQrUrls, setAllQrUrls] = useState<{ label: string; qrUrl: string; dataUrl: string }[]>([]);
 
-  // Reports State
+  // Reports & Analytics State
   const [reportRange, setReportRange] = useState("today");
   const [reportData, setReportData] = useState<ReportData | null>(null);
 
-  // Load Overview Data
+  // Custom Confirmation Dialog State
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmLabel: "Confirm",
+    isDanger: false,
+    onConfirm: () => {},
+  });
+
+  // Helper for Toast Notifications
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
+    const id = String(Date.now());
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 4000);
+  }, []);
+
+  // Copy to clipboard helper
+  const handleCopy = (text: string, label: string = "URL") => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      showToast(`${label} copied to clipboard!`, "success");
+    }
+  };
+
+  // -----------------------------------------------------------
+  // Data Loaders
+  // -----------------------------------------------------------
   const loadOverview = useCallback(async () => {
     try {
       const res = await authFetch("/api/admin/overview");
@@ -127,7 +159,6 @@ function AdminContent() {
     }
   }, []);
 
-  // Load Menu Data
   const loadMenu = useCallback(async () => {
     try {
       const res = await authFetch("/api/admin/menu");
@@ -140,7 +171,6 @@ function AdminContent() {
     }
   }, []);
 
-  // Load Tables Data
   const loadTables = useCallback(async () => {
     try {
       const res = await authFetch("/api/admin/tables");
@@ -153,7 +183,6 @@ function AdminContent() {
     }
   }, []);
 
-  // Load Reports Data
   const loadReports = useCallback(async (r: string) => {
     try {
       const res = await authFetch(`/api/admin/reports?range=${r}`);
@@ -166,6 +195,7 @@ function AdminContent() {
     }
   }, []);
 
+  // Initial Full Load
   useEffect(() => {
     let active = true;
 
@@ -205,11 +235,9 @@ function AdminContent() {
           setReportData(await reportsRes.json());
         }
       } catch (err) {
-        console.error("Failed to load admin initial data:", err);
+        console.error("Failed to load initial admin data:", err);
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
@@ -220,24 +248,38 @@ function AdminContent() {
     };
   }, []);
 
-  // Handle Tab Switch
+  // Handle Tab Navigation Switch
   const switchTab = (t: AdminTab) => {
     setTab(t);
-    setError(null);
-    setSettingsFeedback(null);
     if (t === "overview") loadOverview();
     if (t === "menu") loadMenu();
     if (t === "tables") loadTables();
     if (t === "reports") loadReports(reportRange);
   };
 
+  // Refresh current view data
+  const handleRefreshCurrent = () => {
+    if (tab === "overview") {
+      loadOverview();
+      loadReports(reportRange);
+    } else if (tab === "menu") {
+      loadMenu();
+    } else if (tab === "tables") {
+      loadTables();
+    } else if (tab === "reports") {
+      loadReports(reportRange);
+    }
+    showToast("Dashboard refreshed with latest data.", "info");
+  };
+
+  // -----------------------------------------------------------
+  // Action Handlers
+  // -----------------------------------------------------------
+
   // Save Settings
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    setSettingsFeedback(null);
-    setError(null);
-
-    startTransition(async () => {
+    startTransitionSettings(async () => {
       try {
         const res = await authFetch("/api/admin/settings", {
           method: "PATCH",
@@ -247,12 +289,12 @@ function AdminContent() {
         const json = await res.json();
         if (res.ok) {
           setRestaurant(json.restaurant);
-          setSettingsFeedback("Settings saved successfully.");
+          showToast("Restaurant configuration saved successfully.", "success");
         } else {
-          setError(json.error || "Failed to update settings.");
+          showToast(json.error || "Failed to update settings.", "error");
         }
       } catch {
-        setError("Network error updating settings.");
+        showToast("Network error updating settings.", "error");
       }
     });
   };
@@ -260,16 +302,26 @@ function AdminContent() {
   // Add / Edit Dish
   const handleSaveDish = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsDishSubmitting(true);
+
     try {
       if (editingItem) {
         const res = await authFetch("/api/admin/menu", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingItem.id, ...dishForm }),
+          body: JSON.stringify({
+            id: editingItem.id,
+            ...dishForm,
+          }),
         });
         if (res.ok) {
-          setEditingItem(null);
           loadMenu();
+          setIsAddMenuModalOpen(false);
+          setEditingItem(null);
+          showToast(`Dish "${dishForm.name}" updated successfully.`, "success");
+        } else {
+          const err = await res.json();
+          showToast(err.error || "Failed to update dish.", "error");
         }
       } else {
         const res = await authFetch("/api/admin/menu", {
@@ -278,12 +330,26 @@ function AdminContent() {
           body: JSON.stringify(dishForm),
         });
         if (res.ok) {
-          setIsAddMenuModalOpen(false);
           loadMenu();
+          setIsAddMenuModalOpen(false);
+          setDishForm({
+            name: "",
+            category: "Main Course",
+            price: 150,
+            is_veg: true,
+            description: "",
+            sort_order: 0,
+          });
+          showToast(`Dish "${dishForm.name}" added to menu catalog.`, "success");
+        } else {
+          const err = await res.json();
+          showToast(err.error || "Failed to add dish.", "error");
         }
       }
-    } catch (err) {
-      console.error("Error saving dish:", err);
+    } catch {
+      showToast("Network error saving dish.", "error");
+    } finally {
+      setIsDishSubmitting(false);
     }
   };
 
@@ -293,87 +359,139 @@ function AdminContent() {
       const res = await authFetch("/api/admin/menu", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, is_active: !item.is_active }),
-      });
-      if (res.ok) {
-        setMenuItems((prev) =>
-          prev.map((m) => (m.id === item.id ? { ...m, is_active: !m.is_active } : m))
-        );
-      }
-    } catch (err) {
-      console.error("Error toggling item status:", err);
-    }
-  };
-
-  // Delete Dish (Soft-deactivate if in orders)
-  const handleDeleteDish = async (id: string) => {
-    if (!confirm("Are you sure you want to remove or deactivate this dish?")) return;
-    try {
-      const res = await authFetch(`/api/admin/menu?id=${id}`, {
-        method: "DELETE",
+        body: JSON.stringify({
+          id: item.id,
+          is_active: !item.is_active,
+        }),
       });
       if (res.ok) {
         loadMenu();
+        showToast(
+          `Dish "${item.name}" is now ${!item.is_active ? "Available on QR menu" : "Hidden from QR menu"}.`,
+          "info"
+        );
       }
-    } catch (err) {
-      console.error("Error deleting item:", err);
+    } catch (e) {
+      console.error("Error toggling active status:", e);
     }
+  };
+
+  // Delete Dish (with confirmation dialog)
+  const triggerDeleteDish = (item: MenuItem) => {
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Culinary Item",
+      message: `Are you sure you want to permanently delete "${item.name}" from your menu catalog? This cannot be undone.`,
+      confirmLabel: "Delete Dish",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const res = await authFetch(`/api/admin/menu?id=${encodeURIComponent(item.id)}`, {
+            method: "DELETE",
+          });
+          if (res.ok) {
+            loadMenu();
+            showToast(`"${item.name}" has been removed.`, "success");
+          } else {
+            const err = await res.json();
+            showToast(err.error || "Failed to delete dish.", "error");
+          }
+        } catch {
+          showToast("Network error deleting dish.", "error");
+        }
+      },
+    });
   };
 
   // Add Table
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTableLabel.trim()) return;
+    setIsTableSubmitting(true);
+
     try {
       const res = await authFetch("/api/admin/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label: newTableLabel.trim() }),
       });
-      const json = await res.json();
       if (res.ok) {
-        setNewTableLabel("");
+        loadTables();
         setIsAddTableModalOpen(false);
-        loadTables();
+        setNewTableLabel("");
+        showToast(`Table "${newTableLabel.trim()}" created successfully.`, "success");
       } else {
-        alert(json.error || "Failed to add table.");
+        const err = await res.json();
+        showToast(err.error || "Failed to add table.", "error");
       }
-    } catch (err) {
-      console.error("Error adding table:", err);
+    } catch {
+      showToast("Network error creating table.", "error");
+    } finally {
+      setIsTableSubmitting(false);
     }
   };
 
-  // Regenerate Table Token
-  const handleRegenerateToken = async (tableId: string, label: string) => {
-    if (
-      !confirm(
-        `Regenerate QR token for Table ${label}? This will immediately revoke the existing QR code sticker.`
-      )
-    )
-      return;
-
-    try {
-      const res = await authFetch("/api/admin/tables", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableId, regenerateToken: true }),
-      });
-      if (res.ok) {
-        loadTables();
-      }
-    } catch (err) {
-      console.error("Error regenerating token:", err);
-    }
+  // Regenerate Token (with confirmation dialog)
+  const triggerRegenerateToken = (table: TableData) => {
+    setConfirmState({
+      isOpen: true,
+      title: `Regenerate QR for Table ${table.label}`,
+      message: `Regenerating the QR token will immediately revoke and invalidate the existing physical QR sticker on Table ${table.label}. Any customer scanning the old code will be blocked.`,
+      confirmLabel: "Revoke & Regenerate",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const res = await authFetch("/api/admin/tables", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId: table.id, regenerateToken: true }),
+          });
+          if (res.ok) {
+            loadTables();
+            showToast(`QR token for Table ${table.label} regenerated.`, "success");
+          }
+        } catch (err) {
+          console.error("Error regenerating token:", err);
+        }
+      },
+    });
   };
 
-  // View & Generate QR for a single table
+  // Delete Table (with confirmation dialog)
+  const triggerDeleteTable = (table: TableData) => {
+    setConfirmState({
+      isOpen: true,
+      title: `Delete Table ${table.label}`,
+      message: `Are you sure you want to delete Table ${table.label}? Only tables with zero open sessions or billing records can be removed.`,
+      confirmLabel: "Delete Table",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const res = await authFetch(`/api/admin/tables?id=${encodeURIComponent(table.id)}`, {
+            method: "DELETE",
+          });
+          const json = await res.json();
+          if (res.ok) {
+            loadTables();
+            showToast(`Table ${table.label} deleted.`, "success");
+          } else {
+            showToast(json.error || "Cannot delete table.", "error");
+          }
+        } catch {
+          showToast("Network error deleting table.", "error");
+        }
+      },
+    });
+  };
+
+  // Open Single Table QR Modal
   const handleOpenQr = async (t: TableData) => {
     setSelectedTableForQr(t);
     try {
       const url = await QRCode.toDataURL(t.qrUrl, {
-        width: 350,
+        width: 400,
         margin: 2,
-        color: { dark: "#193A2D", light: "#FFFFFF" },
+        color: { dark: "#173F35", light: "#FFFFFF" },
       });
       setQrDataUrl(url);
     } catch (e) {
@@ -388,9 +506,9 @@ function AdminContent() {
     for (const t of tables) {
       try {
         const d = await QRCode.toDataURL(t.qrUrl, {
-          width: 300,
+          width: 350,
           margin: 2,
-          color: { dark: "#193A2D", light: "#FFFFFF" },
+          color: { dark: "#173F35", light: "#FFFFFF" },
         });
         list.push({ label: t.label, qrUrl: t.qrUrl, dataUrl: d });
       } catch (e) {
@@ -400,7 +518,7 @@ function AdminContent() {
     setAllQrUrls(list);
   };
 
-  // Categories list
+  // Filter Categories
   const categories = ["All", ...Array.from(new Set(menuItems.map((m) => m.category)))];
 
   const filteredMenuItems = menuItems.filter((m) => {
@@ -408,288 +526,97 @@ function AdminContent() {
     const matchesSearch =
       m.name.toLowerCase().includes(menuSearch.toLowerCase()) ||
       (m.description && m.description.toLowerCase().includes(menuSearch.toLowerCase()));
-    const matchesVeg =
-      vegFilter === "all" || (vegFilter === "veg" ? m.is_veg : !m.is_veg);
+    const matchesVeg = vegFilter === "all" || (vegFilter === "veg" ? m.is_veg : !m.is_veg);
     return matchesCat && matchesSearch && matchesVeg;
+  });
+
+  const occupiedTables = tables.filter((t) => t.hasOpenSession);
+  const vacantTables = tables.filter((t) => !t.hasOpenSession);
+
+  const filteredTables = tables.filter((t) => {
+    if (tableFilter === "occupied") return t.hasOpenSession;
+    if (tableFilter === "vacant") return !t.hasOpenSession;
+    return true;
   });
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#FAF7F0]">
         <div className="text-center">
-          <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-[#193A2D] border-t-transparent mb-3" />
-          <p className="text-sm font-semibold text-[#193A2D]">Loading Admin Workspace...</p>
+          <span className="inline-block h-10 w-10 animate-spin rounded-full border-3 border-[#173F35] border-t-transparent mb-4" />
+          <p className="font-serif font-bold text-lg text-[#173F35]">Green Embassy Restaurant SaaS</p>
+          <p className="text-xs text-[#242B2A]/60 mt-1">Connecting to authenticated operations workspace...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F5EF] text-[#252D38]">
-      {/* Sub Header & Navigation Tabs */}
-      <div className="border-b border-[#252D38]/10 bg-white px-6 py-4 shadow-sm print:hidden">
-        <div className="mx-auto flex max-w-6xl flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#193A2D]/60">
-              Restaurant Management
-            </span>
-            <h1 className="text-2xl font-black text-[#193A2D]">
-              {restaurant?.name || "Green Embassy"}
-            </h1>
-          </div>
+    <div className="min-h-screen bg-[#FAF7F0] text-[#242B2A] flex flex-col md:flex-row">
+      {/* 1. COLLAPSIBLE SIDEBAR */}
+      <AdminSidebar
+        currentTab={tab}
+        onSelectTab={switchTab}
+        restaurantName={restaurant?.name || "Green Embassy"}
+        tableCount={tables.length}
+        activeSessionsCount={occupiedTables.length}
+        menuItemCount={menuItems.length}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+      />
 
-          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-[#F8F5EF] p-1.5 border border-[#252D38]/10">
+      {/* 2. MAIN WORKSPACE */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
+          isSidebarCollapsed ? "md:ml-20" : "md:ml-64"
+        }`}
+      >
+        {/* Sticky Dashboard Header */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[#173F35]/10 bg-white/95 px-5 py-3.5 backdrop-blur-md shadow-xs print:hidden">
+          <div className="flex items-center gap-3">
+            {/* Mobile Hamburger Button */}
             <button
-              onClick={() => switchTab("overview")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                tab === "overview"
-                  ? "bg-[#193A2D] text-[#E7B94F] shadow-sm"
-                  : "text-[#252D38]/70 hover:text-[#193A2D]"
-              }`}
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl bg-[#FAF7F0] text-[#173F35] hover:bg-[#173F35]/10 transition-colors cursor-pointer"
+              title="Open Navigation"
             >
-              Overview & Settings
+              <MenuBarsIcon className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => switchTab("menu")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                tab === "menu"
-                  ? "bg-[#193A2D] text-[#E7B94F] shadow-sm"
-                  : "text-[#252D38]/70 hover:text-[#193A2D]"
-              }`}
-            >
-              Menu ({menuItems.length})
-            </button>
-            <button
-              onClick={() => switchTab("tables")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                tab === "tables"
-                  ? "bg-[#193A2D] text-[#E7B94F] shadow-sm"
-                  : "text-[#252D38]/70 hover:text-[#193A2D]"
-              }`}
-            >
-              Tables & QR ({tables.length})
-            </button>
-            <button
-              onClick={() => switchTab("reports")}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                tab === "reports"
-                  ? "bg-[#193A2D] text-[#E7B94F] shadow-sm"
-                  : "text-[#252D38]/70 hover:text-[#193A2D]"
-              }`}
-            >
-              Reports & Sales
-            </button>
-          </div>
-        </div>
-      </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {error && (
-          <div className="mb-6 rounded-2xl bg-red-50 p-4 border border-red-200 text-xs font-bold text-red-800">
-            {error}
-          </div>
-        )}
-
-        {/* TAB 1: OVERVIEW & SETTINGS */}
-        {tab === "overview" && (
-          <div className="space-y-8">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-3xl bg-white p-5 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Total Tables
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-serif font-bold text-base text-[#173F35]">
+                  {tab === "overview" && "Executive Dashboard"}
+                  {tab === "tables" && "Table Occupancy & QR Center"}
+                  {tab === "menu" && "Menu Catalog & Engineering"}
+                  {tab === "reports" && "Sales Analytics & Ledger"}
+                  {tab === "settings" && "Restaurant Configuration"}
                 </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">{stats?.totalTables ?? 0}</p>
-                <span className="text-[11px] font-medium text-emerald-600 mt-1 inline-block">
-                  {stats?.openSessions ?? 0} active dining sessions
+
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                  Live System
                 </span>
               </div>
-
-              <div className="rounded-3xl bg-white p-5 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Active Menu Items
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  {stats?.activeMenuItems ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-[#252D38]/60 mt-1 inline-block">
-                  Live on QR Menu
-                </span>
-              </div>
-
-              <div className="rounded-3xl bg-white p-5 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Invoices Today
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">{stats?.billsToday ?? 0}</p>
-                <span className="text-[11px] font-medium text-[#252D38]/60 mt-1 inline-block">
-                  Settled transactions
-                </span>
-              </div>
-
-              <div className="rounded-3xl bg-white p-5 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Sales Today
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  ₹{stats?.salesToday.toLocaleString("en-IN") ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-emerald-600 mt-1 inline-block">
-                  Real database records
-                </span>
-              </div>
-            </div>
-
-            {/* Restaurant Profile Form */}
-            <div className="rounded-3xl bg-white p-8 border border-[#252D38]/10 shadow-sm">
-              <div className="flex items-center justify-between border-b border-[#252D38]/10 pb-4 mb-6">
-                <div>
-                  <h2 className="text-xl font-black text-[#193A2D]">Restaurant Configuration</h2>
-                  <p className="text-xs text-[#252D38]/60 mt-0.5">
-                    Configure billing parameters, taxes, order cancellation window and business details.
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Active Restaurant
-                </span>
-              </div>
-
-              {settingsFeedback && (
-                <div className="mb-6 rounded-2xl bg-emerald-50 p-4 border border-emerald-200 text-xs font-bold text-emerald-800">
-                  {settingsFeedback}
-                </div>
-              )}
-
-              <form onSubmit={handleSaveSettings} className="space-y-6">
-                <div className="grid sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1.5">
-                      Restaurant Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={settingsForm.name}
-                      onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, name: e.target.value })
-                      }
-                      className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1.5">
-                      GSTIN (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={settingsForm.gstin}
-                      onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, gstin: e.target.value })
-                      }
-                      placeholder="e.g. 29AAAAA0000A1Z5"
-                      className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-semibold uppercase focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1.5">
-                      GST / VAT Tax Percentage (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="50"
-                      required
-                      value={settingsForm.tax_percent}
-                      onChange={(e) =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          tax_percent: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                    />
-                    <p className="text-[11px] text-[#252D38]/60 mt-1">
-                      Applied to customer invoices automatically during billing.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1.5">
-                      Service Charge Percentage (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="30"
-                      required
-                      value={settingsForm.service_charge_percent}
-                      onChange={(e) =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          service_charge_percent: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                    />
-                    <p className="text-[11px] text-[#252D38]/60 mt-1">
-                      Set to 0% if optional or voluntary.
-                    </p>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1.5">
-                      Customer Order Modification & Cancellation Window (Seconds)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="600"
-                      required
-                      value={settingsForm.cancel_window_seconds}
-                      onChange={(e) =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          cancel_window_seconds: parseInt(e.target.value, 10) || 0,
-                        })
-                      }
-                      className="h-12 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-sm font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                    />
-                    <p className="text-[11px] text-[#252D38]/60 mt-1">
-                      During this countdown, guests can edit items or cancel without kitchen friction. Recommended: 120 seconds.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-[#252D38]/10 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="inline-flex h-12 items-center justify-center rounded-xl bg-[#193A2D] px-8 text-sm font-bold text-[#E7B94F] shadow-md hover:bg-[#122b21] disabled:opacity-50 transition-all"
-                  >
-                    {isPending ? "Saving Configuration..." : "Save Settings"}
-                  </button>
-                </div>
-              </form>
+              <p className="text-[11px] text-[#242B2A]/60 hidden sm:block">
+                {restaurant?.name || "Green Embassy"} • Luxury Tech Dining Architecture
+              </p>
             </div>
           </div>
-        )}
 
-        {/* TAB 2: MENU MANAGEMENT */}
-        {tab === "menu" && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-[#193A2D]">Menu Catalog</h2>
-                <p className="text-xs text-[#252D38]/60 mt-0.5">
-                  Add, edit, deactivate dishes, adjust pricing, and organize menu categories.
-                </p>
-              </div>
+          {/* Quick Header Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefreshCurrent}
+              title="Refresh Data"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] text-[#173F35] hover:bg-white hover:border-[#173F35]/40 transition-all cursor-pointer"
+            >
+              <RefreshCwIcon className="w-4 h-4" />
+            </button>
 
+            {tab === "menu" && (
               <button
                 onClick={() => {
                   setDishForm({
@@ -703,715 +630,1009 @@ function AdminContent() {
                   setEditingItem(null);
                   setIsAddMenuModalOpen(true);
                 }}
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#193A2D] px-5 text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] transition-all"
+                className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer"
               >
-                + Add New Dish
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Add Dish</span>
               </button>
-            </div>
-
-            {/* Filter Bar */}
-            <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between rounded-2xl bg-white p-4 border border-[#252D38]/10 shadow-sm">
-              <input
-                type="text"
-                placeholder="Search dish by name or description..."
-                value={menuSearch}
-                onChange={(e) => setMenuSearch(e.target.value)}
-                className="h-10 w-full md:w-72 rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-xs font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-              />
-
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="h-10 rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3 text-xs font-semibold focus:border-[#193A2D] focus:outline-none"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      Category: {c}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="flex rounded-xl bg-[#F8F5EF] p-1 border border-[#252D38]/10 text-xs">
-                  <button
-                    onClick={() => setVegFilter("all")}
-                    className={`rounded-lg px-3 py-1 font-bold ${
-                      vegFilter === "all" ? "bg-[#193A2D] text-[#E7B94F]" : "text-[#252D38]/70"
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => setVegFilter("veg")}
-                    className={`rounded-lg px-3 py-1 font-bold ${
-                      vegFilter === "veg" ? "bg-emerald-600 text-white" : "text-[#252D38]/70"
-                    }`}
-                  >
-                    Veg
-                  </button>
-                  <button
-                    onClick={() => setVegFilter("non-veg")}
-                    className={`rounded-lg px-3 py-1 font-bold ${
-                      vegFilter === "non-veg" ? "bg-red-600 text-white" : "text-[#252D38]/70"
-                    }`}
-                  >
-                    Non-Veg
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Menu Items Table */}
-            <div className="overflow-hidden rounded-3xl bg-white border border-[#252D38]/10 shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-[#252D38]/10 bg-[#F8F5EF] text-[11px] font-bold uppercase tracking-wider text-[#252D38]/70">
-                    <tr>
-                      <th className="px-6 py-4">Item Details</th>
-                      <th className="px-4 py-4">Category</th>
-                      <th className="px-4 py-4">Price</th>
-                      <th className="px-4 py-4 text-center">Status</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#252D38]/5 font-medium">
-                    {filteredMenuItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-[#F8F5EF]/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`h-4 w-4 shrink-0 rounded-sm border p-0.5 flex items-center justify-center ${
-                                item.is_veg ? "border-emerald-600" : "border-red-600"
-                              }`}
-                            >
-                              <span
-                                className={`h-2 w-2 rounded-full ${
-                                  item.is_veg ? "bg-emerald-600" : "bg-red-600"
-                                }`}
-                              />
-                            </span>
-                            <div>
-                              <p className="font-bold text-[#193A2D] text-sm">{item.name}</p>
-                              {item.description && (
-                                <p className="text-[11px] text-[#252D38]/60 line-clamp-1 max-w-xs mt-0.5">
-                                  {item.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-4">
-                          <span className="rounded-lg bg-[#193A2D]/10 px-2.5 py-1 text-[11px] font-bold text-[#193A2D]">
-                            {item.category}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-4 font-black text-sm text-[#193A2D]">
-                          ₹{Number(item.price).toFixed(2)}
-                        </td>
-
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleToggleDishActive(item)}
-                            className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all ${
-                              item.is_active
-                                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                                : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"
-                            }`}
-                          >
-                            {item.is_active ? "● Available" : "○ Inactive"}
-                          </button>
-                        </td>
-
-                        <td className="px-6 py-4 text-right space-x-2">
-                          <button
-                            onClick={() => {
-                              setEditingItem(item);
-                              setDishForm({
-                                name: item.name,
-                                category: item.category,
-                                price: Number(item.price),
-                                is_veg: item.is_veg,
-                                description: item.description || "",
-                                sort_order: item.sort_order || 0,
-                              });
-                            }}
-                            className="rounded-lg border border-[#252D38]/20 bg-white px-3 py-1.5 text-[11px] font-bold text-[#193A2D] hover:bg-[#193A2D]/10 transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDish(item.id)}
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 hover:bg-red-100 transition-colors"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredMenuItems.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-xs text-[#252D38]/50">
-                          No menu items matched your filter.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Add / Edit Dish Modal */}
-            {(isAddMenuModalOpen || editingItem) && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-[#252D38]/10 max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between border-b border-[#252D38]/10 pb-3 mb-4">
-                    <h3 className="text-lg font-black text-[#193A2D]">
-                      {editingItem ? "Edit Dish" : "Add New Dish"}
-                    </h3>
-                    <button
-                      onClick={() => {
-                        setIsAddMenuModalOpen(false);
-                        setEditingItem(null);
-                      }}
-                      className="h-8 w-8 rounded-full bg-[#F8F5EF] font-bold text-[#252D38]/70 hover:bg-[#193A2D] hover:text-white"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveDish} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                        Dish Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={dishForm.name}
-                        onChange={(e) => setDishForm({ ...dishForm, name: e.target.value })}
-                        placeholder="e.g. Paneer Butter Masala"
-                        className="h-11 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-xs font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                          Category
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={dishForm.category}
-                          onChange={(e) => setDishForm({ ...dishForm, category: e.target.value })}
-                          placeholder="e.g. Starters, Main Course"
-                          className="h-11 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-xs font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                          Price (₹)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          required
-                          value={dishForm.price}
-                          onChange={(e) =>
-                            setDishForm({ ...dishForm, price: parseFloat(e.target.value) || 0 })
-                          }
-                          className="h-11 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-xs font-semibold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                        Dietary Type
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 text-xs font-bold text-emerald-800 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="dietary"
-                            checked={dishForm.is_veg}
-                            onChange={() => setDishForm({ ...dishForm, is_veg: true })}
-                            className="accent-emerald-700"
-                          />
-                          Vegetarian (Green mark)
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="dietary"
-                            checked={!dishForm.is_veg}
-                            onChange={() => setDishForm({ ...dishForm, is_veg: false })}
-                            className="accent-red-700"
-                          />
-                          Non-Vegetarian (Red mark)
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                        Description (Ingredients & Allergens)
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={dishForm.description}
-                        onChange={(e) =>
-                          setDishForm({ ...dishForm, description: e.target.value })
-                        }
-                        placeholder="Description displayed on customer mobile menu..."
-                        className="w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] p-3 text-xs font-medium focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-3 border-t border-[#252D38]/10">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAddMenuModalOpen(false);
-                          setEditingItem(null);
-                        }}
-                        className="h-10 rounded-xl border border-[#252D38]/20 px-4 text-xs font-bold text-[#252D38]/70 hover:bg-[#F8F5EF]"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="h-10 rounded-xl bg-[#193A2D] px-6 text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21]"
-                      >
-                        {editingItem ? "Update Dish" : "Save Dish"}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
             )}
-          </div>
-        )}
 
-        {/* TAB 3: TABLES & QR CODE MANAGEMENT */}
-        {tab === "tables" && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-[#193A2D]">Tables & QR Code Center</h2>
-                <p className="text-xs text-[#252D38]/60 mt-0.5">
-                  Generate table tokens, print QR stickers, and regenerate revoked QR codes.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
+            {tab === "tables" && (
+              <>
                 <button
                   onClick={handlePreparePrintSheet}
-                  className="inline-flex h-11 items-center justify-center rounded-xl border-2 border-[#193A2D] bg-white px-4 text-xs font-bold text-[#193A2D] shadow-sm hover:bg-[#193A2D]/5 transition-all"
+                  className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-[#173F35] bg-white px-3 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 transition-all cursor-pointer"
                 >
-                  🖨️ Printable QR Sheet
+                  <PrinterIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Print Sheet</span>
                 </button>
                 <button
                   onClick={() => {
                     setNewTableLabel("");
                     setIsAddTableModalOpen(true);
                   }}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#193A2D] px-5 text-xs font-bold text-[#E7B94F] shadow-sm hover:bg-[#122b21] transition-all"
+                  className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer"
                 >
-                  + Add Table
+                  <PlusIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Add Table</span>
                 </button>
+              </>
+            )}
+
+            {tab === "reports" && (
+              <a
+                href={`/api/admin/reports?range=${reportRange}&format=csv`}
+                download
+                className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-[#173F35] bg-white px-3 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 transition-all"
+              >
+                <DownloadIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Export CSV</span>
+              </a>
+            )}
+          </div>
+        </header>
+
+        {/* Toast Notification Banner */}
+        {toast && (
+          <div className="px-6 pt-4 print:hidden">
+            <div
+              className={`flex items-center justify-between rounded-2xl p-3.5 text-xs font-semibold shadow-luxury border ${
+                toast.type === "error"
+                  ? "bg-rose-50 text-rose-900 border-rose-200"
+                  : toast.type === "info"
+                  ? "bg-sky-50 text-sky-900 border-sky-200"
+                  : "bg-emerald-50 text-emerald-950 border-emerald-200"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {toast.type === "error" && <AlertCircleIcon className="w-4 h-4 text-rose-700 shrink-0" />}
+                {toast.type === "success" && <CheckIcon className="w-4 h-4 text-emerald-700 shrink-0" />}
+                {toast.type === "info" && <SparklesIcon className="w-4 h-4 text-sky-700 shrink-0" />}
+                <span>{toast.message}</span>
               </div>
+              <button
+                onClick={() => setToast(null)}
+                className="text-stone-400 hover:text-stone-700 cursor-pointer"
+              >
+                <CloseIcon className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* Tables Grid */}
-            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {tables.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex flex-col justify-between rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm hover:shadow-md transition-all"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-2xl font-black text-[#193A2D]">
-                        Table {t.label}
-                      </span>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          t.hasOpenSession
-                            ? "bg-amber-100 text-amber-900 border border-amber-300"
-                            : "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                        }`}
-                      >
-                        {t.hasOpenSession ? "● Dining" : "○ Vacant"}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] font-mono text-[#252D38]/50 break-all mb-4">
-                      Token: {t.qr_token.slice(0, 12)}...
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-4 border-t border-[#252D38]/10">
-                    <button
-                      onClick={() => handleOpenQr(t)}
-                      className="w-full h-10 rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] hover:bg-[#122b21] transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <span>📱 View & Print QR</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleRegenerateToken(t.id, t.label)}
-                      className="w-full h-9 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-bold text-amber-900 hover:bg-amber-100 transition-all"
-                    >
-                      Regenerate Token
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Add Table Modal */}
-            {isAddTableModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-[#252D38]/10">
-                  <h3 className="text-lg font-black text-[#193A2D] mb-1">Add New Table</h3>
-                  <p className="text-xs text-[#252D38]/60 mb-4">
-                    Create a dining table. A unique secure QR token will be generated automatically.
-                  </p>
-
-                  <form onSubmit={handleAddTable} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252D38]/70 mb-1">
-                        Table Label
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. T6 or Garden-2"
-                        value={newTableLabel}
-                        onChange={(e) => setNewTableLabel(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-[#252D38]/20 bg-[#F8F5EF] px-3.5 text-xs font-bold focus:border-[#193A2D] focus:bg-white focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-3 border-t border-[#252D38]/10">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddTableModalOpen(false)}
-                        className="h-10 rounded-xl border border-[#252D38]/20 px-4 text-xs font-bold text-[#252D38]/70 hover:bg-[#F8F5EF]"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="h-10 rounded-xl bg-[#193A2D] px-5 text-xs font-bold text-[#E7B94F]"
-                      >
-                        Create Table
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* View Single QR Code Modal */}
-            {selectedTableForQr && qrDataUrl && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-[#252D38]/10 text-center">
-                  <div className="rounded-2xl border border-[#252D38]/10 p-4 bg-[#F8F5EF] mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#E7B94F] bg-[#193A2D] px-3 py-1 rounded-full inline-block mb-3">
-                      GREEN EMBASSY
-                    </span>
-                    <h4 className="text-2xl font-black text-[#193A2D] mb-1">
-                      Table {selectedTableForQr.label}
-                    </h4>
-                    <p className="text-[11px] text-[#252D38]/60 mb-4">
-                      Scan to view live menu & order from your phone
-                    </p>
-
-                    {/* QR Image */}
-                    <div className="mx-auto h-48 w-48 rounded-xl bg-white p-2 shadow-inner border border-[#252D38]/10 flex items-center justify-center">
-                      <Image
-                        src={qrDataUrl}
-                        alt={`QR code for Table ${selectedTableForQr.label}`}
-                        width={180}
-                        height={180}
-                        unoptimized
-                        className="h-auto w-auto"
-                      />
-                    </div>
-
-                    <p className="mt-3 text-[10px] text-[#252D38]/50 break-all font-mono">
-                      {selectedTableForQr.qrUrl}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <a
-                      href={qrDataUrl}
-                      download={`table_${selectedTableForQr.label}_qr.png`}
-                      className="h-11 flex-1 rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F] flex items-center justify-center shadow-sm hover:bg-[#122b21]"
-                    >
-                      💾 Download PNG
-                    </a>
-                    <button
-                      onClick={() => window.print()}
-                      className="h-11 px-4 rounded-xl border border-[#193A2D] text-xs font-bold text-[#193A2D] hover:bg-[#193A2D]/5"
-                    >
-                      Print
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedTableForQr(null);
-                        setQrDataUrl("");
-                      }}
-                      className="h-11 px-4 rounded-xl border border-[#252D38]/20 text-xs font-bold text-[#252D38]/70 hover:bg-[#F8F5EF]"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Printable Multi-Table Sheet */}
-            {isPrintAllMode && (
-              <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
-                <div className="flex justify-between items-center mb-6 print:hidden">
-                  <div>
-                    <h3 className="text-xl font-bold text-[#193A2D]">
-                      Printable Table Tent Sheet ({allQrUrls.length} Tables)
-                    </h3>
-                    <p className="text-xs text-[#252D38]/60">
-                      Standard layout ready for printing on A4 cardstock or table stands.
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => window.print()}
-                      className="h-10 px-5 rounded-xl bg-[#193A2D] text-xs font-bold text-[#E7B94F]"
-                    >
-                      Print Sheet
-                    </button>
-                    <button
-                      onClick={() => setIsPrintAllMode(false)}
-                      className="h-10 px-4 rounded-xl border border-[#252D38]/20 text-xs font-bold text-[#252D38]/70"
-                    >
-                      Exit
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                  {allQrUrls.map((t) => (
-                    <div
-                      key={t.label}
-                      className="rounded-2xl border-2 border-dashed border-[#193A2D]/40 p-6 text-center bg-[#F8F5EF] page-break-inside-avoid"
-                    >
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#E7B94F] bg-[#193A2D] px-3 py-0.5 rounded-full inline-block mb-2">
-                        GREEN EMBASSY
-                      </span>
-                      <h4 className="text-3xl font-black text-[#193A2D] mb-1">
-                        Table {t.label}
-                      </h4>
-                      <p className="text-xs text-[#252D38]/70 mb-4">
-                        Scan with your smartphone camera to order
-                      </p>
-
-                      <div className="mx-auto h-40 w-40 rounded-xl bg-white p-2 shadow-sm border border-[#252D38]/10 flex items-center justify-center">
-                        <Image
-                          src={t.dataUrl}
-                          alt={`QR ${t.label}`}
-                          width={150}
-                          height={150}
-                          unoptimized
-                          className="h-auto w-auto"
-                        />
-                      </div>
-                      <p className="mt-3 text-[9px] font-mono text-[#252D38]/50">
-                        No app download required • Instant ordering
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* TAB 4: REPORTS & ANALYTICS */}
-        {tab === "reports" && (
-          <div className="space-y-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-[#193A2D]">Reports & Sales Analytics</h2>
-                <p className="text-xs text-[#252D38]/60 mt-0.5">
-                  Audit sales records, payment method breakdowns, item popularity, and tax collections.
-                </p>
-              </div>
+        {/* Content Views */}
+        <main className="p-6 md:p-8 space-y-8 flex-1">
+          {/* ========================================================= */}
+          {/* TAB 1: EXECUTIVE DASHBOARD OVERVIEW */}
+          {/* ========================================================= */}
+          {tab === "overview" && (
+            <div className="space-y-8">
+              {/* 4 PRIMARY KPI CARDS */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Revenue Today */}
+                <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury hover:shadow-luxury-lg transition-all group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                      Gross Revenue Today
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                      Live
+                    </span>
+                  </div>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    ₹{stats?.salesToday.toLocaleString("en-IN") ?? 0}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-[#242B2A]/60">
+                    <span>{stats?.billsToday ?? 0} settled invoices</span>
+                    <span className="font-semibold text-emerald-800">Verified</span>
+                  </div>
+                </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex rounded-xl bg-white p-1 border border-[#252D38]/10 text-xs shadow-sm">
-                  {["today", "7d", "30d", "all"].map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => {
-                        setReportRange(r);
-                        loadReports(r);
-                      }}
-                      className={`rounded-lg px-3 py-1.5 font-bold uppercase ${
-                        reportRange === r ? "bg-[#193A2D] text-[#E7B94F]" : "text-[#252D38]/70"
+                {/* Total Orders / Bills */}
+                <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury hover:shadow-luxury-lg transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                      Settled Invoices
+                    </span>
+                    <ReceiptIcon className="w-4 h-4 text-[#173F35]/40" />
+                  </div>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    {stats?.billsToday ?? 0}
+                  </p>
+                  <p className="mt-2 text-[11px] text-[#242B2A]/60">
+                    Transactions audited through cashier desk
+                  </p>
+                </div>
+
+                {/* Average Bill Value */}
+                <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury hover:shadow-luxury-lg transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                      Average Order Value
+                    </span>
+                    <TrendingUpIcon className="w-4 h-4 text-[#E8B95B]" />
+                  </div>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    ₹{reportData?.summary.averageBillValue ?? 0}
+                  </p>
+                  <p className="mt-2 text-[11px] text-[#242B2A]/60">
+                    Average guest spend per dining session
+                  </p>
+                </div>
+
+                {/* Table Occupancy Rate */}
+                <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury hover:shadow-luxury-lg transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                      Table Occupancy
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        occupiedTables.length > 0
+                          ? "bg-amber-50 text-amber-900 border border-amber-200"
+                          : "bg-stone-50 text-stone-600"
                       }`}
                     >
-                      {r}
-                    </button>
+                      {tables.length > 0
+                        ? `${Math.round((occupiedTables.length / tables.length) * 100)}% Occ.`
+                        : "0%"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    {occupiedTables.length}{" "}
+                    <span className="text-sm font-sans font-medium text-[#242B2A]/50">
+                      / {tables.length} Active
+                    </span>
+                  </p>
+                  <p className="mt-2 text-[11px] text-[#242B2A]/60">
+                    {vacantTables.length} tables vacant & ready
+                  </p>
+                </div>
+              </div>
+
+              {/* VISUAL TABLE OCCUPANCY MAP SNAPSHOT */}
+              <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-serif font-bold text-base text-[#173F35]">
+                      Floor Plan & Live Table Occupancy
+                    </h3>
+                    <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+                      Visual overview of real-time dining sessions across the floor
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => switchTab("tables")}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#173F35] hover:text-[#E8B95B] transition-colors cursor-pointer"
+                  >
+                    <span>Full QR Center</span>
+                    <ExternalLinkIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {tables.map((t) => (
+                    <div
+                      key={t.id}
+                      onClick={() => switchTab("tables")}
+                      className={`cursor-pointer rounded-2xl p-3 border transition-all hover:scale-[1.02] shadow-xs ${
+                        t.hasOpenSession
+                          ? "border-[#E8B95B] bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40"
+                          : "border-[#173F35]/15 bg-[#FAF7F0] hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-serif font-bold text-sm text-[#173F35]">
+                          Table {t.label}
+                        </span>
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            t.hasOpenSession ? "bg-[#E8B95B] animate-pulse" : "bg-emerald-600"
+                          }`}
+                        />
+                      </div>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/60">
+                        {t.hasOpenSession ? "Dining Active" : "Vacant"}
+                      </p>
+                    </div>
                   ))}
+
+                  {tables.length === 0 && (
+                    <p className="col-span-full py-6 text-center text-xs text-[#242B2A]/50 font-serif">
+                      No tables registered yet. Add tables in the Tables tab.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* SPLIT ANALYTICS: PAYMENT BREAKDOWN & POPULAR ITEMS */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Payment Breakdown Donut */}
+                <div className="lg:col-span-6">
+                  {reportData && (
+                    <PaymentBreakdownChart
+                      breakdown={reportData.paymentBreakdown}
+                      totalSales={reportData.summary.totalSales}
+                    />
+                  )}
+                </div>
+
+                {/* Popular Menu Items */}
+                <div className="lg:col-span-6 rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-serif font-bold text-base text-[#173F35]">
+                        Top Performing Dishes
+                      </h3>
+                      <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+                        Highest revenue generators ordered via customer QR
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => switchTab("menu")}
+                      className="text-xs font-bold text-[#173F35] hover:text-[#E8B95B] transition-colors cursor-pointer"
+                    >
+                      View Menu ({menuItems.length})
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-[#173F35]/5 space-y-1">
+                    {reportData?.popularItems.slice(0, 5).map((dish, idx) => (
+                      <div
+                        key={dish.name}
+                        className="py-2.5 flex items-center justify-between text-xs first:pt-0"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-6 w-6 items-center justify-center rounded-lg text-[10px] font-bold ${
+                              idx === 0
+                                ? "bg-[#E8B95B] text-[#173F35] shadow-xs"
+                                : "bg-[#FAF7F0] text-[#173F35]"
+                            }`}
+                          >
+                            #{idx + 1}
+                          </span>
+                          <div>
+                            <span className="font-serif font-bold text-sm text-[#173F35]">
+                              {dish.name}
+                            </span>
+                            <p className="text-[10px] text-[#242B2A]/50">
+                              {dish.quantity} orders fulfilled
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="font-bold text-sm text-[#173F35] tabular-nums">
+                            ₹{dish.revenue.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {(!reportData || reportData.popularItems.length === 0) && (
+                      <div className="py-8 text-center text-xs text-[#242B2A]/50 font-serif">
+                        No customer orders recorded in this reporting period.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RECENT SETTLED BILLS LEDGER */}
+              <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-serif font-bold text-base text-[#173F35]">
+                      Recent Settled Invoices
+                    </h3>
+                    <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+                      Audited transactions closed at cashier desk
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => switchTab("reports")}
+                    className="text-xs font-bold text-[#173F35] hover:text-[#E8B95B] transition-colors cursor-pointer"
+                  >
+                    Full Ledger
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-[#173F35]/10 bg-[#FAF7F0] text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/60">
+                      <tr>
+                        <th className="px-4 py-3">Invoice #</th>
+                        <th className="px-4 py-3">Table</th>
+                        <th className="px-4 py-3">Payment Method</th>
+                        <th className="px-4 py-3 text-right">Tax (GST)</th>
+                        <th className="px-4 py-3 text-right">Total Amount</th>
+                        <th className="px-4 py-3 text-right">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#173F35]/5 font-medium">
+                      {reportData?.recentBills.slice(0, 5).map((bill) => (
+                        <tr key={bill.id} className="hover:bg-[#FAF7F0]/60 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-[#173F35]">
+                            #{bill.billNumber}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="rounded-lg bg-[#173F35]/10 px-2.5 py-0.5 font-bold text-[#173F35]">
+                              Table {bill.tableLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 uppercase text-[11px] font-semibold text-[#242B2A]">
+                            {bill.paymentMethod}
+                          </td>
+                          <td className="px-4 py-3 text-right text-[#242B2A]/60 tabular-nums">
+                            ₹{bill.tax}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-sm text-[#173F35] tabular-nums">
+                            ₹{bill.total.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-[11px] text-[#242B2A]/50">
+                            {new Date(bill.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {(!reportData || reportData.recentBills.length === 0) && (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-xs text-[#242B2A]/50 font-serif">
+                            No billing settlements recorded yet today.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 2: TABLES & QR CODE CENTER */}
+          {/* ========================================================= */}
+          {tab === "tables" && (
+            <div className="space-y-6">
+              {/* Tables Filter Bar */}
+              <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between rounded-3xl bg-white p-4 border border-[#173F35]/10 shadow-luxury">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#173F35] uppercase tracking-wider">
+                    Filter Floor:
+                  </span>
+                  <div className="flex rounded-xl bg-[#FAF7F0] p-1 border border-[#173F35]/10 text-xs font-bold">
+                    <button
+                      onClick={() => setTableFilter("all")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "all" ? "bg-[#173F35] text-[#E8B95B]" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      All Tables ({tables.length})
+                    </button>
+                    <button
+                      onClick={() => setTableFilter("occupied")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "occupied" ? "bg-[#E8B95B] text-[#173F35]" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Dining Active ({occupiedTables.length})
+                    </button>
+                    <button
+                      onClick={() => setTableFilter("vacant")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        tableFilter === "vacant" ? "bg-emerald-800 text-white" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Vacant ({vacantTables.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handlePreparePrintSheet}
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl border border-[#173F35] bg-white px-4 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 cursor-pointer"
+                  >
+                    <PrinterIcon className="w-3.5 h-3.5" />
+                    <span>Print All Table Tents</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setNewTableLabel("");
+                      setIsAddTableModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer"
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" />
+                    <span>Add New Table</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tables Occupancy Grid */}
+              <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {filteredTables.map((t) => (
+                  <div
+                    key={t.id}
+                    className={`flex flex-col justify-between rounded-3xl p-6 border transition-all shadow-luxury hover:shadow-luxury-lg ${
+                      t.hasOpenSession
+                        ? "bg-gradient-to-b from-amber-50/40 to-white border-[#E8B95B]"
+                        : "bg-white border-[#173F35]/10"
+                    }`}
+                  >
+                    <div>
+                      {/* Card Header */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-2xl font-serif font-bold text-[#173F35]">
+                          Table {t.label}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                            t.hasOpenSession
+                              ? "bg-amber-100 text-amber-950 border border-amber-300"
+                              : "bg-emerald-50 text-emerald-900 border border-emerald-200"
+                          }`}
+                        >
+                          {t.hasOpenSession ? "● Dining Active" : "○ Vacant / Ready"}
+                        </span>
+                      </div>
+
+                      {/* Token Preview */}
+                      <div className="flex items-center justify-between rounded-xl bg-[#FAF7F0] px-2.5 py-1.5 border border-[#173F35]/10 mb-4 text-[10px] font-mono text-[#242B2A]/60">
+                        <span className="truncate">Token: {t.qr_token.slice(0, 10)}...</span>
+                        <button
+                          onClick={() => handleCopy(t.qrUrl, `Table ${t.label} Link`)}
+                          title="Copy QR Order Link"
+                          className="text-[#173F35] hover:text-[#E8B95B] font-bold ml-1 cursor-pointer"
+                        >
+                          <CopyIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Table Actions */}
+                    <div className="space-y-2 pt-4 border-t border-[#173F35]/10">
+                      <button
+                        onClick={() => handleOpenQr(t)}
+                        className="w-full h-10 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] hover:bg-[#102e26] shadow-luxury transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <QrCodeIcon className="w-4 h-4" />
+                        <span>View & Print QR</span>
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => triggerRegenerateToken(t)}
+                          className="h-8 rounded-xl border border-amber-300 bg-amber-50 text-[10px] font-bold text-amber-900 hover:bg-amber-100 transition-all cursor-pointer"
+                        >
+                          Revoke Token
+                        </button>
+                        <button
+                          onClick={() => triggerDeleteTable(t)}
+                          className="h-8 rounded-xl border border-rose-200 bg-rose-50 text-[10px] font-bold text-rose-800 hover:bg-rose-100 transition-all cursor-pointer"
+                        >
+                          Delete Table
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {filteredTables.length === 0 && (
+                  <div className="col-span-full py-6">
+                    <EmptyState
+                      icon={QrCodeIcon}
+                      title="No Tables Found"
+                      description={`There are currently no dining tables matching the "${tableFilter}" filter status.`}
+                      actionLabel="Show All Tables"
+                      onAction={() => setTableFilter("all")}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: MENU MANAGEMENT & CATALOG */}
+          {/* ========================================================= */}
+          {tab === "menu" && (
+            <div className="space-y-6">
+              {/* Menu Filter Strip */}
+              <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between rounded-3xl bg-white p-4 border border-[#173F35]/10 shadow-luxury">
+                <input
+                  type="text"
+                  placeholder="Search dishes by name or ingredients..."
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  className="h-10 w-full md:w-80 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="h-10 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3 text-xs font-semibold focus:border-[#173F35] focus:outline-none transition-all cursor-pointer"
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        Category: {c}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex rounded-xl bg-[#FAF7F0] p-1 border border-[#173F35]/10 text-xs font-bold">
+                    <button
+                      onClick={() => setVegFilter("all")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        vegFilter === "all" ? "bg-[#173F35] text-[#E8B95B]" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      All Dishes
+                    </button>
+                    <button
+                      onClick={() => setVegFilter("veg")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        vegFilter === "veg" ? "bg-emerald-800 text-white" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Veg
+                    </button>
+                    <button
+                      onClick={() => setVegFilter("non-veg")}
+                      className={`rounded-lg px-3 py-1 transition-all cursor-pointer ${
+                        vegFilter === "non-veg" ? "bg-rose-800 text-white" : "text-[#242B2A]/70"
+                      }`}
+                    >
+                      Non-Veg
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setDishForm({
+                        name: "",
+                        category: "Main Course",
+                        price: 150,
+                        is_veg: true,
+                        description: "",
+                        sort_order: 0,
+                      });
+                      setEditingItem(null);
+                      setIsAddMenuModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer ml-auto"
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" />
+                    <span>Add Dish</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Menu Catalog Table with Thumbnails */}
+              <div className="overflow-hidden rounded-3xl bg-white border border-[#173F35]/10 shadow-luxury">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-[#173F35]/10 bg-[#FAF7F0] text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/60">
+                      <tr>
+                        <th className="px-6 py-4">Item & Photography</th>
+                        <th className="px-4 py-4">Category</th>
+                        <th className="px-4 py-4">Price</th>
+                        <th className="px-4 py-4 text-center">Status</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#173F35]/5 font-medium">
+                      {filteredMenuItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-[#FAF7F0]/60 transition-colors group">
+                          {/* Item with Thumbnail */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3.5">
+                              <MenuThumbnail
+                                name={item.name}
+                                category={item.category}
+                                isVeg={item.is_veg}
+                                size="md"
+                              />
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <DietaryBadge isVeg={item.is_veg} />
+                                  <span className="font-serif font-bold text-sm text-[#173F35]">
+                                    {item.name}
+                                  </span>
+                                </div>
+                                {item.description && (
+                                  <p className="text-[11px] text-[#242B2A]/60 line-clamp-1 max-w-sm">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Category Badge */}
+                          <td className="px-4 py-4">
+                            <span className="rounded-lg bg-[#173F35]/10 px-2.5 py-1 text-[11px] font-bold text-[#173F35]">
+                              {item.category}
+                            </span>
+                          </td>
+
+                          {/* Price */}
+                          <td className="px-4 py-4 font-bold text-sm text-[#173F35] tabular-nums">
+                            ₹{Number(item.price).toFixed(2)}
+                          </td>
+
+                          {/* Availability Toggle */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => handleToggleDishActive(item)}
+                              className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all cursor-pointer ${
+                                item.is_active
+                                  ? "bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100"
+                                  : "bg-stone-100 text-stone-600 border border-stone-200 hover:bg-stone-200"
+                              }`}
+                            >
+                              {item.is_active ? "● Live on QR" : "○ Paused"}
+                            </button>
+                          </td>
+
+                          {/* Action Buttons */}
+                          <td className="px-6 py-4 text-right space-x-2">
+                            <button
+                              onClick={() => {
+                                setEditingItem(item);
+                                setDishForm({
+                                  name: item.name,
+                                  category: item.category,
+                                  price: Number(item.price),
+                                  is_veg: item.is_veg,
+                                  description: item.description || "",
+                                  sort_order: item.sort_order || 0,
+                                });
+                                setIsAddMenuModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl border border-[#173F35]/20 bg-white px-3 py-1.5 text-[11px] font-bold text-[#173F35] hover:bg-[#173F35]/5 transition-colors cursor-pointer"
+                            >
+                              <PencilIcon className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => triggerDeleteDish(item)}
+                              className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-100 transition-colors cursor-pointer"
+                            >
+                              <TrashIcon className="w-3 h-3" />
+                              <span>Delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {filteredMenuItems.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-xs text-[#242B2A]/50 font-serif">
+                            No menu items matched your active filter or search.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 4: REPORTS & SALES ANALYTICS */}
+          {/* ========================================================= */}
+          {tab === "reports" && (
+            <div className="space-y-8">
+              {/* Range Filter Controls */}
+              <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between rounded-3xl bg-white p-4 border border-[#173F35]/10 shadow-luxury">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#173F35] uppercase tracking-wider">
+                    Reporting Window:
+                  </span>
+                  <div className="flex rounded-xl bg-[#FAF7F0] p-1 border border-[#173F35]/10 text-xs font-bold">
+                    {["today", "7d", "30d", "all"].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => {
+                          setReportRange(r);
+                          loadReports(r);
+                        }}
+                        className={`rounded-lg px-3.5 py-1.5 uppercase transition-all cursor-pointer ${
+                          reportRange === r ? "bg-[#173F35] text-[#E8B95B]" : "text-[#242B2A]/70"
+                        }`}
+                      >
+                        {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : r}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <a
                   href={`/api/admin/reports?range=${reportRange}&format=csv`}
                   download
-                  className="h-10 rounded-xl border border-[#193A2D] bg-white px-4 text-xs font-bold text-[#193A2D] flex items-center gap-1.5 shadow-sm hover:bg-[#193A2D]/5"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 rounded-xl border border-[#173F35] bg-white px-5 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 transition-all"
                 >
-                  📥 Export CSV
+                  <DownloadIcon className="w-3.5 h-3.5" />
+                  <span>Export Financial CSV</span>
                 </a>
               </div>
-            </div>
 
-            {/* Report Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Gross Revenue
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  ₹{reportData?.summary.totalSales.toLocaleString("en-IN") ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-emerald-600 mt-1 inline-block">
-                  Verified invoices
-                </span>
-              </div>
+              {/* 4 Financial Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                    Gross Invoiced Revenue
+                  </span>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    ₹{reportData?.summary.totalSales.toLocaleString("en-IN") ?? 0}
+                  </p>
+                  <span className="text-[11px] font-semibold text-emerald-800 mt-1 inline-block">
+                    {reportData?.summary.billsCount ?? 0} settled transactions
+                  </span>
+                </div>
 
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Completed Bills
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  {reportData?.summary.billsCount ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-[#252D38]/60 mt-1 inline-block">
-                  Tables settled
-                </span>
-              </div>
+                <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                    Average Bill Value (AOV)
+                  </span>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    ₹{reportData?.summary.averageBillValue ?? 0}
+                  </p>
+                  <span className="text-[11px] font-medium text-[#242B2A]/60 mt-1 inline-block">
+                    Per seated dining party
+                  </span>
+                </div>
 
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  Average Order Value
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  ₹{reportData?.summary.averageBillValue ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-[#252D38]/60 mt-1 inline-block">
-                  Per completed table
-                </span>
-              </div>
+                <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                    GST Tax Collected
+                  </span>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    ₹{reportData?.summary.totalTax.toLocaleString("en-IN") ?? 0}
+                  </p>
+                  <span className="text-[11px] font-semibold text-emerald-800 mt-1 inline-block">
+                    Govt tax liability ledger
+                  </span>
+                </div>
 
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#252D38]/60">
-                  GST Collected
-                </span>
-                <p className="mt-2 text-3xl font-black text-[#193A2D]">
-                  ₹{reportData?.summary.totalTax ?? 0}
-                </p>
-                <span className="text-[11px] font-medium text-emerald-600 mt-1 inline-block">
-                  5% Tax audit ledger
-                </span>
-              </div>
-            </div>
-
-            {/* Split Grid: Payment Breakdown & Popular Dishes */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Payment Methods */}
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <h3 className="text-base font-black text-[#193A2D] mb-4">Payment Methods</h3>
-                <div className="space-y-4">
-                  {(["upi", "cash", "card", "other"] as PaymentMethod[]).map((m) => {
-                    const amount = reportData?.paymentBreakdown[m] ?? 0;
-                    const tot = reportData?.summary.totalSales || 1;
-                    const pct = Math.round((amount / tot) * 100);
-
-                    return (
-                      <div key={m}>
-                        <div className="flex justify-between text-xs font-bold mb-1">
-                          <span className="uppercase text-[#252D38]">{m}</span>
-                          <span className="text-[#193A2D]">
-                            ₹{amount.toLocaleString("en-IN")} ({pct}%)
-                          </span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-[#F8F5EF] overflow-hidden">
-                          <div
-                            className="h-full bg-[#193A2D] rounded-full transition-all duration-500"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
+                    Cancelled Orders
+                  </span>
+                  <p className="mt-2 text-3xl font-serif font-bold text-[#173F35] tabular-nums">
+                    {reportData?.summary.cancelledOrdersCount ?? 0}
+                  </p>
+                  <span className="text-[11px] font-medium text-[#242B2A]/60 mt-1 inline-block">
+                    Within guest lock window
+                  </span>
                 </div>
               </div>
 
-              {/* Popular Dishes */}
-              <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-                <h3 className="text-base font-black text-[#193A2D] mb-4">Top Selling Dishes</h3>
-                <div className="divide-y divide-[#252D38]/5">
-                  {reportData?.popularItems.slice(0, 5).map((dish, idx) => (
-                    <div key={dish.name} className="py-2.5 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="h-6 w-6 rounded-full bg-[#193A2D]/10 font-bold text-[#193A2D] flex items-center justify-center text-[10px]">
-                          #{idx + 1}
-                        </span>
-                        <span className="font-bold text-[#193A2D]">{dish.name}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-black text-[#193A2D]">
-                          ₹{dish.revenue.toLocaleString("en-IN")}
-                        </span>
-                        <p className="text-[10px] text-[#252D38]/60">{dish.quantity} sold</p>
-                      </div>
-                    </div>
-                  ))}
-                  {(!reportData || reportData.popularItems.length === 0) && (
-                    <p className="py-6 text-center text-xs text-[#252D38]/50">
-                      No order items recorded in this time range.
-                    </p>
+              {/* Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-6">
+                  {reportData && (
+                    <PaymentBreakdownChart
+                      breakdown={reportData.paymentBreakdown}
+                      totalSales={reportData.summary.totalSales}
+                    />
+                  )}
+                </div>
+
+                <div className="lg:col-span-6">
+                  {reportData && (
+                    <CategorySalesBarChart
+                      categories={reportData.categorySales}
+                      totalSales={reportData.summary.totalSales}
+                    />
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Table Utilization Ranking */}
-            <div className="rounded-3xl bg-white p-6 border border-[#252D38]/10 shadow-sm">
-              <h3 className="text-base font-black text-[#193A2D] mb-4">Table Revenue Matrix</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {reportData?.tableUtilization.map((t) => (
-                  <div
-                    key={t.label}
-                    className="rounded-2xl bg-[#F8F5EF] p-3 text-center border border-[#252D38]/10"
-                  >
-                    <span className="text-xs font-black text-[#193A2D]">Table {t.label}</span>
-                    <p className="text-sm font-black text-emerald-800 mt-1">₹{t.total}</p>
-                    <span className="text-[10px] text-[#252D38]/60">{t.count} bills</span>
+              {/* Table Revenue Matrix */}
+              {reportData && <TableRevenueMatrixChart tables={reportData.tableUtilization} />}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 5: RESTAURANT CONFIGURATION / SETTINGS */}
+          {/* ========================================================= */}
+          {tab === "settings" && (
+            <div className="space-y-6 max-w-4xl">
+              <div className="rounded-3xl bg-white p-8 border border-[#173F35]/10 shadow-luxury">
+                <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-4 mb-6">
+                  <div>
+                    <h2 className="text-xl font-serif font-bold text-[#173F35]">
+                      Restaurant Configuration & Tax Profile
+                    </h2>
+                    <p className="text-xs text-[#242B2A]/60 mt-0.5">
+                      Configure official restaurant identity, GSTIN, billing tax rules, and guest cancellation window.
+                    </p>
                   </div>
-                ))}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-900">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                    Production Ready
+                  </span>
+                </div>
+
+                <form onSubmit={handleSaveSettings} className="space-y-6">
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
+                        Restaurant Brand Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={settingsForm.name}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, name: e.target.value })
+                        }
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
+                        GSTIN Registration Number (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsForm.gstin}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, gstin: e.target.value })
+                        }
+                        placeholder="e.g. 29AAAAA0000A1Z5"
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold uppercase focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
+                        GST / VAT Percentage (%) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="50"
+                        required
+                        value={settingsForm.tax_percent}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            tax_percent: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                      />
+                      <p className="text-[11px] text-[#242B2A]/60 mt-1">
+                        Authoritative rate applied to customer billing invoices.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
+                        Service Charge (%) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="30"
+                        required
+                        value={settingsForm.service_charge_percent}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            service_charge_percent: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                      />
+                      <p className="text-[11px] text-[#242B2A]/60 mt-1">
+                        Optional hospitality service charge (0% if not levied).
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
+                        Customer Order Modification & Cancellation Window (Seconds) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="600"
+                        required
+                        value={settingsForm.cancel_window_seconds}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            cancel_window_seconds: parseInt(e.target.value, 10) || 0,
+                          })
+                        }
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                      />
+                      <p className="text-[11px] text-[#242B2A]/60 mt-1">
+                        During this grace countdown, guests can edit items or cancel orders without kitchen friction. Recommended: 120 seconds.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-[#173F35]/10 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isPendingSettings}
+                      className="inline-flex h-12 items-center justify-center rounded-xl bg-[#173F35] px-8 text-sm font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer"
+                    >
+                      {isPendingSettings ? "Saving Settings..." : "Save Configuration"}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
+
+      {/* 3. MODALS & OVERLAYS */}
+      {/* Add / Edit Dish Modal */}
+      <DishModal
+        isOpen={isAddMenuModalOpen}
+        onClose={() => {
+          setIsAddMenuModalOpen(false);
+          setEditingItem(null);
+        }}
+        isEditing={!!editingItem}
+        dishForm={dishForm}
+        onChangeDishForm={setDishForm}
+        onSubmit={handleSaveDish}
+        isSubmitting={isDishSubmitting}
+        categories={categories}
+      />
+
+      {/* Add Table Modal */}
+      <TableModal
+        isOpen={isAddTableModalOpen}
+        onClose={() => setIsAddTableModalOpen(false)}
+        label={newTableLabel}
+        onChangeLabel={setNewTableLabel}
+        onSubmit={handleAddTable}
+        isSubmitting={isTableSubmitting}
+      />
+
+      {/* Single Table QR Code Modal */}
+      <QrModal
+        table={selectedTableForQr}
+        qrDataUrl={qrDataUrl}
+        onClose={() => {
+          setSelectedTableForQr(null);
+          setQrDataUrl("");
+        }}
+        onCopyLink={(url) => handleCopy(url, "Table QR Link")}
+      />
+
+      {/* Printable Multi-Table Tent Sheet Modal */}
+      <PrintSheetModal
+        isOpen={isPrintAllMode}
+        onClose={() => setIsPrintAllMode(false)}
+        allQrUrls={allQrUrls}
+      />
+
+      {/* Custom Confirmation Dialog */}
+      <ConfirmDialog
+        state={confirmState}
+        onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
+      />
     </div>
   );
 }
