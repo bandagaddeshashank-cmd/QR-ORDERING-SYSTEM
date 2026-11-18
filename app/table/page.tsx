@@ -132,6 +132,11 @@ function TableContent() {
   const chipsRef = useRef<HTMLElement>(null);
   const inFlightRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const dataRef = useRef<TableResponse | null>(null);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
     null
@@ -172,8 +177,9 @@ function TableContent() {
       abortControllerRef.current = controller;
 
       try {
+        const hasExisting = Boolean(dataRef.current);
         const url =
-          isPoll && data
+          isPoll && hasExisting
             ? `/api/orders?t=${encodeURIComponent(token)}&poll=1`
             : `/api/orders?t=${encodeURIComponent(token)}`;
 
@@ -218,7 +224,7 @@ function TableContent() {
         inFlightRef.current = false;
       }
     },
-    [token, data]
+    [token]
   );
 
   // Polling using sequential timeout: runs 4s AFTER previous fetch finishes (never overlaps)
@@ -232,7 +238,7 @@ function TableContent() {
 
     const pollLoop = async () => {
       if (!active) return;
-      await fetchTableData(Boolean(data));
+      await fetchTableData(Boolean(dataRef.current));
       if (active) {
         timerId = setTimeout(pollLoop, 4000);
       }
@@ -247,7 +253,7 @@ function TableContent() {
         abortControllerRef.current.abort();
       }
     };
-  }, [token, mounted, fetchTableData, data]);
+  }, [token, mounted, fetchTableData]);
 
   // Active category: use explicit choice or fallback to first available
   const currentCategory = activeCategory || categories[0]?.[0] || "";

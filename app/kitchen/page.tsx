@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import KitchenGate from "./KitchenGate";
 import WaiterCalls from "./waitercalls";
 import { authFetch } from "@/lib/authFetch";
@@ -99,18 +99,32 @@ function playKitchenChime() {
   }
 }
 
+const subscribeToMute = (callback: () => void) => {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+};
+
+const getMuteSnapshot = () => {
+  try {
+    return localStorage.getItem("kds_muted") === "true";
+  } catch {
+    return false;
+  }
+};
+
+const getMuteServerSnapshot = () => false;
+
+function useKdsMuted() {
+  return useSyncExternalStore(subscribeToMute, getMuteSnapshot, getMuteServerSnapshot);
+}
+
 function KitchenKDS() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [offline, setOffline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [fetchedAt, setFetchedAt] = useState(() => Date.now());
-  const [muted, setMuted] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("kds_muted") === "true";
-    }
-    return false;
-  });
+  const muted = useKdsMuted();
 
   const previousOrderIdsRef = useRef<Set<string>>(new Set());
 
@@ -173,9 +187,11 @@ function KitchenKDS() {
 
   const toggleMute = () => {
     const next = !muted;
-    setMuted(next);
     if (typeof window !== "undefined") {
-      localStorage.setItem("kds_muted", String(next));
+      try {
+        localStorage.setItem("kds_muted", String(next));
+        window.dispatchEvent(new Event("storage"));
+      } catch {}
     }
     if (!next) {
       playKitchenChime();

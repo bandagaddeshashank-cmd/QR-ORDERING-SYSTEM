@@ -10,9 +10,18 @@ export default function CallWaiter({
   initialCalled?: boolean;
 }) {
   const [userCalled, setUserCalled] = useState(false);
+  const [prevInitialCalled, setPrevInitialCalled] = useState(initialCalled);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const inFlightRef = useRef(false);
+
+  // When staff acknowledges and closes the call, re-enable the button without cascading effect renders
+  if (initialCalled !== prevInitialCalled) {
+    setPrevInitialCalled(initialCalled);
+    if (!initialCalled) {
+      setUserCalled(false);
+    }
+  }
 
   const called = initialCalled || userCalled;
 
