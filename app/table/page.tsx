@@ -17,6 +17,8 @@ import {
   UtensilsIcon,
   CheckCircleIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@/components/ui/icons";
 import { DietaryBadge } from "@/components/ui/Badge";
 import { MenuCardSkeleton } from "@/components/ui/Skeleton";
@@ -229,6 +231,10 @@ function TableContent() {
   const inFlightRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const dataRef = useRef<TableResponse | null>(null);
+  const activeCategoryRef = useRef<string>("");
+  const isManualScrollRef = useRef(false);
+  const manualScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intersectingMapRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
 
   useEffect(() => {
     dataRef.current = data;
@@ -356,6 +362,264 @@ function TableContent() {
 
   // Active category: use explicit choice or fallback to first available
   const currentCategory = activeCategory || categories[0]?.[0] || "";
+
+  // Keep activeCategoryRef synchronized
+  useEffect(() => {
+    activeCategoryRef.current = activeCategory;
+  }, [activeCategory]);
+
+  // Center the active category chip in the horizontal scrolling navigation bar
+  const scrollChipIntoView = useCallback(
+    (cat: string) => {
+      const nav = chipsRef.current;
+      if (!nav) return;
+      const activeIdx = categories.findIndex(([c]) => c === cat);
+      if (activeIdx === -1) return;
+      const chip = nav.children[activeIdx] as HTMLElement | undefined;
+      if (!chip) return;
+      const chipLeft = chip.offsetLeft;
+      const chipWidth = chip.offsetWidth;
+      const navWidth = nav.offsetWidth;
+      const targetScrollLeft = chipLeft - navWidth / 2 + chipWidth / 2;
+      nav.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: "smooth" });
+    },
+    [categories]
+  );
+
+  // Category navigation scroll arrow states
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  const updateScrollArrows = useCallback(() => {
+    const nav = chipsRef.current;
+    if (!nav) return;
+
+    const scrollLeft = nav.scrollLeft;
+    const clientWidth = nav.clientWidth;
+    const scrollWidth = nav.scrollWidth;
+
+    const overflow = scrollWidth > clientWidth + 4;
+    setHasOverflow(overflow);
+
+    if (!overflow) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+  }, []);
+
+  const handleScrollLeft = useCallback(() => {
+    const nav = chipsRef.current;
+    if (!nav) return;
+    const scrollDistance = Math.round(nav.clientWidth * 0.75);
+    nav.scrollBy({ left: -scrollDistance, behavior: "smooth" });
+  }, []);
+
+  const handleScrollRight = useCallback(() => {
+    const nav = chipsRef.current;
+    if (!nav) return;
+    const scrollDistance = Math.round(nav.clientWidth * 0.75);
+    nav.scrollBy({ left: scrollDistance, behavior: "smooth" });
+  }, []);
+
+  // Monitor category navigation scroll position to update arrow disabled states
+  useEffect(() => {
+    const nav = chipsRef.current;
+    if (!nav || !mounted) return;
+
+    updateScrollArrows();
+
+    nav.addEventListener("scroll", updateScrollArrows, { passive: true });
+    window.addEventListener("resize", updateScrollArrows);
+
+    const timer = setTimeout(updateScrollArrows, 150);
+
+    return () => {
+      nav.removeEventListener("scroll", updateScrollArrows);
+      window.removeEventListener("resize", updateScrollArrows);
+      clearTimeout(timer);
+    };
+  }, [mounted, categories, updateScrollArrows]);
+
+  // Auto-scroll the horizontal category nav when active category changes
+  useEffect(() => {
+    if (currentCategory) {
+      scrollChipIntoView(currentCategory);
+    }
+  }, [currentCategory, scrollChipIntoView]);
+
+  // Handle manual category chip click
+  const handleCategoryClick = useCallback(
+    (cat: string, idx: number) => {
+      isManualScrollRef.current = true;
+      if (manualScrollTimerRef.current) {
+        clearTimeout(manualScrollTimerRef.current);
+      }
+
+      setActiveCategory(cat);
+      scrollChipIntoView(cat);
+
+      const target = document.getElementById(`cat-${idx}`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      manualScrollTimerRef.current = setTimeout(() => {
+        isManualScrollRef.current = false;
+      }, 850);
+    },
+    [scrollChipIntoView]
+  );
+
+  // Clear manual scroll lock on direct touch/wheel interaction
+  useEffect(() => {
+    const cancelManualLock = () => {
+      if (isManualScrollRef.current) {
+        isManualScrollRef.current = false;
+        if (manualScrollTimerRef.current) {
+          clearTimeout(manualScrollTimerRef.current);
+        }
+      }
+    };
+    window.addEventListener("wheel", cancelManualLock, { passive: true });
+    window.addEventListener("touchmove", cancelManualLock, { passive: true });
+    return () => {
+      window.removeEventListener("wheel", cancelManualLock);
+      window.removeEventListener("touchmove", cancelManualLock);
+      if (manualScrollTimerRef.current) {
+        clearTimeout(manualScrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  // IntersectionObserver to monitor all rendered category sections and sync navigation
+  useEffect(() => {
+    if (!mounted || categories.length === 0 || q) {
+      return;
+    }
+
+    const intersectingMap = intersectingMapRef.current;
+    intersectingMap.clear();
+    const activationOffset = 150;
+
+    const observerCallback: IntersectionObserverCallback = (entries) => {
+      // Do not override selection while smooth click-scroll animation is running
+      if (isManualScrollRef.current) {
+        return;
+      }
+
+      entries.forEach((entry) => {
+        const cat = entry.target.getAttribute("data-category");
+        if (cat) {
+          if (entry.isIntersecting) {
+            intersectingMapRef.current.set(cat, entry);
+          } else {
+            intersectingMapRef.current.delete(cat);
+          }
+        }
+      });
+
+      if (intersectingMapRef.current.size === 0) {
+        return;
+      }
+
+      const visibleList: { category: string; index: number; top: number; bottom: number }[] = [];
+      intersectingMapRef.current.forEach((entry, cat) => {
+        const idxAttr = entry.target.getAttribute("data-index");
+        const idx = idxAttr ? parseInt(idxAttr, 10) : 0;
+        const rect = entry.boundingClientRect;
+        visibleList.push({
+          category: cat,
+          index: idx,
+          top: rect.top,
+          bottom: rect.bottom,
+        });
+      });
+
+      visibleList.sort((a, b) => a.index - b.index);
+
+      // Identify category that reached or passed the activation line
+      const passedActivation = visibleList.filter((s) => s.top <= activationOffset);
+
+      let targetCat: string | null = null;
+      if (passedActivation.length > 0) {
+        // Lowest section on page that has crossed the line
+        targetCat = passedActivation[passedActivation.length - 1].category;
+      } else if (visibleList.length > 0) {
+        targetCat = visibleList[0].category;
+      }
+
+      if (targetCat && targetCat !== activeCategoryRef.current) {
+        activeCategoryRef.current = targetCat;
+        setActiveCategory(targetCat);
+      }
+    };
+
+    const observer = new IntersectionObserver(observerCallback, {
+      root: null,
+      rootMargin: "-135px 0px -65% 0px",
+      threshold: [0, 0.1, 0.25],
+    });
+
+    categories.forEach((_c, idx) => {
+      const el = document.getElementById(`cat-${idx}`);
+      if (el) {
+        observer.observe(el);
+      }
+    });
+
+    return () => {
+      observer.disconnect();
+      intersectingMap.clear();
+    };
+  }, [mounted, categories, q]);
+
+  // Boundary scroll sync for very top (hero) and very bottom of menu
+  useEffect(() => {
+    if (!mounted || categories.length === 0 || q) return;
+
+    let ticking = false;
+    const handleScrollBoundary = () => {
+      if (isManualScrollRef.current || ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        if (isManualScrollRef.current) return;
+
+        const scrollY = window.scrollY;
+        const scrollHeight = document.documentElement.scrollHeight;
+        const innerHeight = window.innerHeight;
+
+        // Top boundary: near very top of page
+        if (scrollY < 80 && categories[0]?.[0]) {
+          const firstCat = categories[0][0];
+          if (activeCategoryRef.current !== firstCat) {
+            activeCategoryRef.current = firstCat;
+            setActiveCategory(firstCat);
+          }
+          return;
+        }
+
+        // Bottom boundary: reached end of page
+        if (scrollY + innerHeight >= scrollHeight - 50 && categories.length > 0) {
+          const lastCat = categories[categories.length - 1][0];
+          if (activeCategoryRef.current !== lastCat) {
+            activeCategoryRef.current = lastCat;
+            setActiveCategory(lastCat);
+          }
+        }
+      });
+    };
+
+    window.addEventListener("scroll", handleScrollBoundary, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScrollBoundary);
+    };
+  }, [mounted, categories, q]);
 
   const changeQty = (id: string, delta: number) => {
     setCart((prev) => {
@@ -497,23 +761,23 @@ function TableContent() {
         <div className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-radial from-[#E8B95B]/25 to-transparent blur-2xl" />
         <div className="pointer-events-none absolute -left-12 -bottom-12 h-44 w-44 rounded-full bg-radial from-[#E8B95B]/15 to-transparent blur-xl" />
 
-        <div className="relative z-10 flex items-center justify-between gap-3 mb-3.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 p-1 border border-[#E8B95B]/35 backdrop-blur-xs shadow-luxury">
+        <div className="relative z-10 flex items-center justify-between gap-2.5 sm:gap-3 mb-3.5">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 p-1 border border-[#E8B95B]/35 backdrop-blur-xs shadow-luxury">
               <Image
                 src="/logo.png"
                 alt="Green Embassy Logo"
                 width={64}
                 height={40}
-                className="h-8 w-auto object-contain drop-shadow"
+                className="h-7 sm:h-8 w-auto object-contain drop-shadow"
                 priority
               />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#E8B95B] block truncate">
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[#E8B95B] block truncate">
                 Haute Cuisine &bull; Bespoke Dining
               </span>
-              <h1 className="text-xl font-serif font-bold text-white leading-tight truncate tracking-wide">
+              <h1 className="text-lg sm:text-xl font-serif font-bold text-white leading-tight truncate tracking-wide">
                 {data?.restaurant?.name || "Green Embassy"}
               </h1>
             </div>
@@ -742,35 +1006,70 @@ function TableContent() {
             </button>
           </div>
 
-          {/* 4. BEAUTIFUL HORIZONTAL SCROLLING CATEGORY NAVIGATION */}
+          {/* 4. BEAUTIFUL HORIZONTAL SCROLLING CATEGORY NAVIGATION WITH ARROWS */}
           {!q && categories.length > 0 && (
-            <nav
-              ref={chipsRef}
-              className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden select-none"
-            >
-              {categories.map(([cat, list], idx) => {
-                const isSelected = currentCategory === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setActiveCategory(cat);
-                      document
-                        .getElementById(`cat-${idx}`)
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer select-none ${
-                      isSelected
-                        ? "bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/50 font-bold shadow-luxury scale-[1.02]"
-                        : "bg-white text-[#242B2A]/80 border border-[#173F35]/10 hover:bg-[#FAF7F0] hover:border-[#173F35]/25"
-                    }`}
-                  >
-                    <span>{cat}</span>
-                    <span className="ml-1.5 opacity-60 text-[10px]">({list.length})</span>
-                  </button>
-                );
-              })}
-            </nav>
+            <div className="relative flex items-center gap-1.5">
+              {/* Left Arrow Button */}
+              {hasOverflow && (
+                <button
+                  type="button"
+                  onClick={handleScrollLeft}
+                  disabled={!canScrollLeft}
+                  aria-label="Scroll categories left"
+                  title="Previous categories"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/35 shadow-luxury transition-all select-none ${
+                    canScrollLeft
+                      ? "hover:bg-[#102e26] hover:border-[#E8B95B]/70 active:scale-90 cursor-pointer opacity-100"
+                      : "opacity-25 cursor-not-allowed pointer-events-none"
+                  }`}
+                >
+                  <ChevronLeftIcon className="w-4 h-4 text-[#E8B95B]" />
+                </button>
+              )}
+
+              <nav
+                ref={chipsRef}
+                className="flex-1 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden select-none"
+              >
+                {categories.map(([cat, list], idx) => {
+                  const isSelected = currentCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      data-category={cat}
+                      data-index={idx}
+                      onClick={() => handleCategoryClick(cat, idx)}
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer select-none ${
+                        isSelected
+                          ? "bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/50 font-bold shadow-luxury scale-[1.02]"
+                          : "bg-white text-[#242B2A]/80 border border-[#173F35]/10 hover:bg-[#FAF7F0] hover:border-[#173F35]/25"
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      <span className="ml-1.5 opacity-60 text-[10px]">({list.length})</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* Right Arrow Button */}
+              {hasOverflow && (
+                <button
+                  type="button"
+                  onClick={handleScrollRight}
+                  disabled={!canScrollRight}
+                  aria-label="Scroll categories right"
+                  title="Next categories"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/35 shadow-luxury transition-all select-none ${
+                    canScrollRight
+                      ? "hover:bg-[#102e26] hover:border-[#E8B95B]/70 active:scale-90 cursor-pointer opacity-100"
+                      : "opacity-25 cursor-not-allowed pointer-events-none"
+                  }`}
+                >
+                  <ChevronRightIcon className="w-4 h-4 text-[#E8B95B]" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -825,6 +1124,8 @@ function TableContent() {
           <section
             key={cat}
             id={`cat-${idx}`}
+            data-category={cat}
+            data-index={idx}
             className="pt-6"
             style={{ scrollMarginTop: "145px" }}
           >

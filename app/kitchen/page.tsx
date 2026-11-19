@@ -365,7 +365,7 @@ function KitchenKDS() {
       <WaiterCalls />
 
       {/* 3. THREE-COLUMN KITCHEN PIPELINE */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 items-start min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 xl:gap-5 flex-1 items-start min-w-0">
         {/* ========================================================= */}
         {/* COLUMN 1: NEW ORDERS */}
         {/* ========================================================= */}

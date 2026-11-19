@@ -89,7 +89,11 @@ export default function AdminSidebar({
   ];
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut({ scope: "local" });
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("[AdminSidebar] Sign out error:", err);
+    }
   };
 
   return (
