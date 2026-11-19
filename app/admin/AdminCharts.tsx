@@ -41,9 +41,9 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
     {
       key: "card",
       label: "Credit / Debit Card",
-      color: "#2E5A44",
-      bg: "bg-[#2E5A44]",
-      border: "border-[#2E5A44]",
+      color: "#0F766E",
+      bg: "bg-[#0F766E]",
+      border: "border-[#0F766E]",
     },
     {
       key: "other",

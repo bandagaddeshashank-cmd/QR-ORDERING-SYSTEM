@@ -50,7 +50,6 @@ export async function POST(req: Request) {
     const rows = validItems.map((r) => ({
       order_id: order.id,
       ...r,
-      status: "active",
     }));
 
     const { error: itemsError } = await supabaseAdmin

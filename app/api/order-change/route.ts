@@ -175,7 +175,6 @@ export async function POST(req: Request) {
           .update({
             quantity: q,
             note: note || null,
-            status: "active",
           })
           .eq("id", it.id)
           .eq("order_id", orderId);

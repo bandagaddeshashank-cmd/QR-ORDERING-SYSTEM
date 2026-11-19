@@ -51,7 +51,7 @@ export function ChangeButton({
     <button
       onClick={onOpen}
       aria-label={`Modify order #${order.id.slice(0, 6)}, ${clock(left)} remaining`}
-      className="inline-flex items-center gap-1.5 shrink-0 rounded-full border border-[#E8B95B]/60 bg-[#E8B95B]/20 px-3 py-1 text-xs font-bold tabular-nums text-[#173F35] hover:bg-[#E8B95B]/30 active:scale-95 transition-all cursor-pointer shadow-xs select-none"
+      className="inline-flex items-center gap-1.5 shrink-0 rounded-full border border-[#E8B95B]/60 bg-gradient-to-r from-[#E8B95B]/25 to-[#E8B95B]/15 px-3 py-1 text-xs font-bold tabular-nums text-[#173F35] hover:bg-[#E8B95B]/35 active:scale-95 transition-all cursor-pointer shadow-xs select-none"
     >
       <PencilIcon className="w-3 h-3 text-[#173F35]" />
       <span>Edit &middot; {clock(left)}</span>

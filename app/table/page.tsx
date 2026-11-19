@@ -64,7 +64,7 @@ function getDishHighlight(item: Item, index: number) {
     return {
       label: "Chef's Special",
       Icon: SparklesIcon,
-      badgeStyle: "bg-[#E8B95B]/20 text-[#173F35] border border-[#E8B95B]/50 font-bold",
+      badgeStyle: "bg-gradient-to-r from-[#E8B95B]/25 to-[#E8B95B]/10 text-[#173F35] border border-[#E8B95B]/60 font-bold shadow-xs",
     };
   }
   if (
@@ -77,13 +77,14 @@ function getDishHighlight(item: Item, index: number) {
     return {
       label: "Bestseller",
       Icon: FlameIcon,
-      badgeStyle: "bg-amber-100 text-amber-900 border border-amber-300 font-bold",
+      badgeStyle: "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-900 border border-amber-300 font-bold shadow-xs",
     };
   }
   if (text.includes("popular") || text.includes("crisp") || text.includes("paneer")) {
     return {
       label: "Popular",
-      badgeStyle: "bg-[#173F35]/10 text-[#173F35] border border-[#173F35]/20 font-semibold",
+      Icon: UtensilsIcon,
+      badgeStyle: "bg-[#173F35]/10 text-[#173F35] border border-[#173F35]/20 font-semibold shadow-xs",
     };
   }
   return null;
@@ -97,18 +98,18 @@ function DishImagePlaceholder({ category }: { category: string }) {
   const isBeverage = lower.includes("drink") || lower.includes("beverage") || lower.includes("juice") || lower.includes("mocktail");
 
   return (
-    <div className="relative flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#173F35] via-[#12332b] to-[#0c211b] p-2 text-center text-[#E8B95B] shadow-inner border border-[#E8B95B]/30 group-hover:scale-102 transition-transform">
-      <div className="absolute inset-0 bg-[radial-gradient(#E8B95B_1px,transparent_1px)] [background-size:8px_8px] opacity-20" />
-      <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 mb-1 backdrop-blur-xs">
-        {isStarter && <FlameIcon className="w-4 h-4 text-[#E8B95B]" />}
-        {isDessert && <SparklesIcon className="w-4 h-4 text-[#E8B95B]" />}
-        {isBeverage && <SparklesIcon className="w-4 h-4 text-cyan-300" />}
-        {!isStarter && !isDessert && !isBeverage && <UtensilsIcon className="w-4 h-4 text-[#E8B95B]" />}
+    <div className="relative flex h-28 w-28 sm:h-32 sm:w-32 shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#173F35] via-[#1B483D] to-[#0D241E] p-2.5 text-center text-[#E8B95B] shadow-inner border border-[#E8B95B]/30 group-hover:scale-102 transition-transform select-none">
+      <div className="absolute inset-0 bg-[radial-gradient(#E8B95B_1px,transparent_1px)] [background-size:8px_8px] opacity-25" />
+      <div className="relative z-10 flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 mb-1.5 backdrop-blur-xs border border-[#E8B95B]/20 shadow-xs">
+        {isStarter && <FlameIcon className="w-4.5 h-4.5 text-[#E8B95B]" />}
+        {isDessert && <SparklesIcon className="w-4.5 h-4.5 text-[#E8B95B]" />}
+        {isBeverage && <SparklesIcon className="w-4.5 h-4.5 text-cyan-300" />}
+        {!isStarter && !isDessert && !isBeverage && <UtensilsIcon className="w-4.5 h-4.5 text-[#E8B95B]" />}
       </div>
-      <span className="relative z-10 text-[9px] font-serif uppercase tracking-wider text-[#FAF7F0]/90 line-clamp-1 font-bold">
+      <span className="relative z-10 text-[10px] font-serif uppercase tracking-wider text-[#FAF7F0] line-clamp-1 font-bold">
         {category}
       </span>
-      <span className="relative z-10 text-[7px] font-sans font-semibold text-[#E8B95B]/80 tracking-widest uppercase">
+      <span className="relative z-10 text-[8px] font-sans font-bold text-[#E8B95B]/85 tracking-widest uppercase mt-0.5">
         Green Embassy
       </span>
     </div>
@@ -132,15 +133,16 @@ function DishCardImage({
   }
 
   return (
-    <div className="relative h-24 w-24 sm:h-28 sm:w-28 overflow-hidden rounded-2xl border border-[#173F35]/10 shadow-xs">
+    <div className="relative h-28 w-28 sm:h-32 sm:w-32 shrink-0 overflow-hidden rounded-2xl border border-[#173F35]/15 shadow-sm group-hover:shadow-md transition-all">
       <Image
         src={imageUrl}
         alt={name}
         fill
-        className="object-cover"
+        className="object-cover transition-transform duration-500 group-hover:scale-105"
         unoptimized
         onError={() => setLoadError(true)}
       />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none" />
     </div>
   );
 }
@@ -490,20 +492,20 @@ function TableContent() {
   return (
     <div className="mx-auto min-h-screen max-w-md bg-[#FAF7F0] text-[#242B2A] pb-36 selection:bg-[#E8B95B] selection:text-[#173F35]">
       {/* 1. RESTAURANT HERO BANNER */}
-      <header className="relative overflow-hidden rounded-b-3xl bg-[#173F35] px-4 pt-4 pb-4 text-[#FAF7F0] shadow-luxury-lg">
+      <header className="relative overflow-hidden rounded-b-3xl bg-[#173F35] px-4 pt-5 pb-4 text-[#FAF7F0] shadow-luxury-lg">
         {/* Subtle decorative glow */}
-        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-radial from-[#E8B95B]/20 to-transparent blur-2xl" />
-        <div className="pointer-events-none absolute -left-10 -bottom-10 h-36 w-36 rounded-full bg-radial from-[#E8B95B]/10 to-transparent blur-xl" />
+        <div className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-radial from-[#E8B95B]/25 to-transparent blur-2xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-44 w-44 rounded-full bg-radial from-[#E8B95B]/15 to-transparent blur-xl" />
 
-        <div className="relative z-10 flex items-center justify-between gap-3 mb-3">
+        <div className="relative z-10 flex items-center justify-between gap-3 mb-3.5">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 p-1 border border-[#E8B95B]/30 backdrop-blur-xs shadow-xs">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 p-1 border border-[#E8B95B]/35 backdrop-blur-xs shadow-luxury">
               <Image
                 src="/logo.png"
                 alt="Green Embassy Logo"
                 width={64}
                 height={40}
-                className="h-8 w-auto object-contain"
+                className="h-8 w-auto object-contain drop-shadow"
                 priority
               />
             </div>
@@ -511,7 +513,7 @@ function TableContent() {
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#E8B95B] block truncate">
                 Haute Cuisine &bull; Bespoke Dining
               </span>
-              <h1 className="text-lg font-serif font-bold text-white leading-tight truncate">
+              <h1 className="text-xl font-serif font-bold text-white leading-tight truncate tracking-wide">
                 {data?.restaurant?.name || "Green Embassy"}
               </h1>
             </div>
@@ -523,22 +525,22 @@ function TableContent() {
         </div>
 
         {/* Table Number & Status Pill Banner */}
-        <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-2.5">
+        <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-3">
           <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#E8B95B] to-[#D4A346] px-3 py-1 font-serif font-bold text-xs text-[#173F35] shadow-luxury border border-white/20">
-              <span className="text-[9px] uppercase font-sans tracking-widest font-extrabold opacity-80">
+            <div className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#E8B95B] via-[#f1ce7c] to-[#d8a84b] px-3.5 py-1 font-serif font-bold text-xs text-[#173F35] shadow-luxury border border-white/30">
+              <span className="text-[9px] uppercase font-sans tracking-widest font-black opacity-80">
                 Table
               </span>
-              <span className="text-xs font-serif font-black">
+              <span className="text-xs font-serif font-black tracking-wide">
                 {data ? data.table : "—"}
               </span>
             </div>
-            <span className="text-[11px] text-white/80 font-medium">
-              Digital Service Active
+            <span className="text-[11px] text-white/85 font-medium hidden sm:inline">
+              Tableside Ordering
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] text-[#E8B95B] font-semibold">
+          <div className="flex items-center gap-1.5 text-[11px] text-[#E8B95B] font-semibold bg-black/20 px-2.5 py-1 rounded-full border border-white/10">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E8B95B] opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E8B95B]" />
@@ -698,7 +700,7 @@ function TableContent() {
 
       {/* 3. STICKY MODERN SEARCH BAR & VEG FILTER */}
       <div className="sticky top-0 z-30 bg-[#FAF7F0]/95 backdrop-blur-md pt-3 pb-2.5 border-b border-[#173F35]/10 shadow-xs">
-        <div className="px-4">
+        <div className="px-4 space-y-2.5">
           <div className="flex items-center gap-2">
             {/* Search Input */}
             <div className="relative flex-1">
@@ -709,7 +711,7 @@ function TableContent() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search dishes, drinks, desserts..."
                 aria-label="Search dishes"
-                className="h-11 w-full rounded-full border border-[#173F35]/15 bg-white pl-10 pr-9 text-xs sm:text-sm text-[#242B2A] placeholder:text-[#242B2A]/40 focus:border-[#173F35] focus:ring-1 focus:ring-[#173F35] focus:outline-none transition-all shadow-luxury"
+                className="h-11 w-full rounded-full border border-[#173F35]/15 bg-white pl-10 pr-9 text-xs sm:text-sm text-[#242B2A] placeholder:text-[#242B2A]/40 focus:border-[#173F35] focus:ring-2 focus:ring-[#173F35]/15 focus:outline-none transition-all shadow-luxury"
               />
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#242B2A]/40">
                 <SearchIcon className="w-4 h-4" />
@@ -728,9 +730,9 @@ function TableContent() {
             {/* Veg Only Toggle Switch */}
             <button
               onClick={() => setVegOnly(!vegOnly)}
-              className={`flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition-all shadow-luxury cursor-pointer ${
+              className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-xs font-bold transition-all shadow-luxury cursor-pointer select-none active:scale-95 ${
                 vegOnly
-                  ? "bg-emerald-800 text-white border border-emerald-900"
+                  ? "bg-emerald-800 text-white border border-emerald-900 shadow-sm"
                   : "bg-white text-[#242B2A] border border-[#173F35]/15 hover:bg-stone-50"
               }`}
               title="Filter vegetarian dishes only"
@@ -744,7 +746,7 @@ function TableContent() {
           {!q && categories.length > 0 && (
             <nav
               ref={chipsRef}
-              className="mt-2.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden select-none"
             >
               {categories.map(([cat, list], idx) => {
                 const isSelected = currentCategory === cat;
@@ -757,7 +759,7 @@ function TableContent() {
                         .getElementById(`cat-${idx}`)
                         ?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
-                    className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer select-none ${
                       isSelected
                         ? "bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/50 font-bold shadow-luxury scale-[1.02]"
                         : "bg-white text-[#242B2A]/80 border border-[#173F35]/10 hover:bg-[#FAF7F0] hover:border-[#173F35]/25"
@@ -844,9 +846,13 @@ function TableContent() {
                   <li
                     key={item.id}
                     id={`item-${item.id}`}
-                    className="rounded-3xl bg-white p-4 sm:p-5 border border-[#173F35]/10 shadow-luxury hover:border-[#173F35]/25 transition-all"
+                    className={`group relative rounded-3xl p-4 sm:p-5 border transition-all duration-200 ${
+                      qty > 0
+                        ? "bg-white border-[#E8B95B] ring-1 ring-[#E8B95B]/40 shadow-luxury-lg"
+                        : "bg-white border-[#173F35]/10 shadow-luxury hover:border-[#173F35]/25 hover:shadow-luxury-lg"
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-3 sm:gap-4">
                       {/* Left: Dish Information */}
                       <div className="min-w-0 flex-1">
                         {/* Dietary Badge & Special Labels */}
@@ -863,7 +869,7 @@ function TableContent() {
                         </div>
 
                         {/* Dish Name */}
-                        <h3 className="font-serif font-bold text-base leading-snug text-[#173F35]">
+                        <h3 className="font-serif font-bold text-base sm:text-lg leading-snug text-[#173F35] tracking-tight group-hover:text-[#102e26] transition-colors">
                           {item.name}
                         </h3>
 
@@ -875,7 +881,7 @@ function TableContent() {
                         )}
 
                         {/* Price */}
-                        <p className="mt-2 text-base font-serif font-bold tabular-nums text-[#173F35]">
+                        <p className="mt-2.5 text-base sm:text-lg font-serif font-bold tabular-nums text-[#173F35]">
                           ₹{item.price}
                         </p>
                       </div>
@@ -894,17 +900,17 @@ function TableContent() {
                             <button
                               onClick={() => changeQty(item.id, 1)}
                               aria-label={`Add ${item.name} to cart`}
-                              className="flex h-9 w-22 items-center justify-center gap-1 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] active:scale-95 transition-all cursor-pointer border border-[#E8B95B]/40"
+                              className="flex h-9 w-24 items-center justify-center gap-1 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] active:scale-95 transition-all cursor-pointer border border-[#E8B95B]/40"
                             >
                               <PlusIcon className="w-3.5 h-3.5" />
                               <span>ADD</span>
                             </button>
                           ) : (
-                            <div className="flex h-9 w-24 items-center justify-between rounded-xl bg-[#173F35] px-1.5 text-white shadow-luxury border border-[#E8B95B]/40">
+                            <div className="flex h-9.5 w-26 items-center justify-between rounded-xl bg-[#173F35] px-1 text-white shadow-luxury border border-[#E8B95B]/40">
                               <button
                                 aria-label={`Reduce ${item.name}`}
                                 onClick={() => changeQty(item.id, -1)}
-                                className="flex h-8 w-7 items-center justify-center text-[#E8B95B] hover:bg-white/10 rounded-lg transition-colors cursor-pointer active:scale-90"
+                                className="flex h-8.5 w-8 items-center justify-center text-[#E8B95B] hover:bg-white/10 rounded-lg transition-colors cursor-pointer active:scale-90"
                               >
                                 <MinusIcon className="w-3.5 h-3.5" />
                               </button>
@@ -914,7 +920,7 @@ function TableContent() {
                               <button
                                 aria-label={`Add another ${item.name}`}
                                 onClick={() => changeQty(item.id, 1)}
-                                className="flex h-8 w-7 items-center justify-center text-[#E8B95B] hover:bg-white/10 rounded-lg transition-colors cursor-pointer active:scale-90"
+                                className="flex h-8.5 w-8 items-center justify-center text-[#E8B95B] hover:bg-white/10 rounded-lg transition-colors cursor-pointer active:scale-90"
                               >
                                 <PlusIcon className="w-3.5 h-3.5" />
                               </button>
@@ -926,7 +932,7 @@ function TableContent() {
 
                     {/* Preparation note input when selected */}
                     {qty > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-[#173F35]/10">
+                      <div className="mt-3.5 pt-2.5 border-t border-[#173F35]/10 animate-fade-in">
                         <input
                           type="text"
                           maxLength={150}
@@ -939,7 +945,7 @@ function TableContent() {
                           }
                           placeholder="Special instructions for chef (e.g. less spicy, no onion)"
                           aria-label={`Note for ${item.name}`}
-                          className="h-8 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3 text-xs text-[#242B2A] placeholder:text-[#242B2A]/40 focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                          className="h-8.5 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3 text-xs text-[#242B2A] placeholder:text-[#242B2A]/45 focus:border-[#173F35] focus:bg-white focus:outline-none transition-all shadow-inner"
                         />
                       </div>
                     )}
@@ -957,7 +963,7 @@ function TableContent() {
           {/* Backdrop Overlay when Reviewing */}
           {reviewing && (
             <div
-              className="fixed inset-0 z-30 bg-black/50 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs transition-opacity"
               onClick={() => setReviewing(false)}
               aria-label="Close cart review sheet"
             />
@@ -966,59 +972,73 @@ function TableContent() {
           <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md p-3">
             {/* Slide-up Cart Review Panel */}
             {reviewing && (
-              <div className="mb-2 max-h-[65vh] overflow-y-auto rounded-3xl border border-[#173F35]/20 bg-white p-5 shadow-luxury-lg animate-slide-up">
+              <div className="mb-2 max-h-[70vh] overflow-y-auto rounded-3xl border border-[#173F35]/20 bg-white p-5 shadow-2xl animate-slide-up">
                 {/* Drag handle pill */}
                 <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-300" />
 
-                <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-2 mb-3">
+                <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-3 mb-3">
                   <div className="flex items-center gap-2">
-                    <ShoppingBagIcon className="w-4 h-4 text-[#173F35]" />
-                    <h3 className="font-serif font-bold text-sm text-[#173F35]">
-                      Order Cart ({totalCartCount} items)
-                    </h3>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#173F35]/10 text-[#173F35]">
+                      <ShoppingBagIcon className="w-4 h-4 text-[#173F35]" />
+                    </div>
+                    <div>
+                      <h3 className="font-serif font-bold text-sm text-[#173F35]">
+                        Your Order Summary
+                      </h3>
+                      <p className="text-[10px] text-[#242B2A]/60">
+                        {totalCartCount} {totalCartCount === 1 ? "dish" : "dishes"} selected
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setReviewing(false)}
-                    className="flex items-center gap-1 text-xs text-[#242B2A]/60 hover:text-[#242B2A] cursor-pointer"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FAF7F0] text-[#242B2A]/70 hover:bg-[#173F35] hover:text-white cursor-pointer transition-colors"
+                    aria-label="Close cart review"
                   >
-                    <span>Close</span>
-                    <CloseIcon className="w-3.5 h-3.5" />
+                    <CloseIcon className="w-4 h-4" />
                   </button>
                 </div>
 
                 <ul className="divide-y divide-[#173F35]/10">
                   {cartLines.map((i) => (
-                    <li key={i.id} className="py-2.5">
+                    <li key={i.id} className="py-3 first:pt-1">
                       <div className="flex items-center justify-between gap-3 text-xs">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <DietaryBadge isVeg={i.is_veg} />
-                            <p className="font-semibold text-[#242B2A]">{i.name}</p>
+                            <p className="font-semibold text-sm text-[#242B2A] leading-tight truncate">
+                              {i.name}
+                            </p>
                           </div>
                           {(notes[i.id] ?? "").trim() && (
-                            <p className="text-[11px] text-[#173F35] italic mt-0.5">
+                            <p className="text-[11px] text-[#173F35] italic mt-1 bg-[#173F35]/5 px-2 py-0.5 rounded-md inline-block">
                               Note: {notes[i.id].trim()}
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5">
+
+                        {/* Cart Stepper */}
+                        <div className="flex items-center gap-1 rounded-xl border border-[#173F35]/20 bg-[#FAF7F0] p-0.5">
                           <button
                             onClick={() => changeQty(i.id, -1)}
-                            className="flex h-6 w-6 items-center justify-center rounded border border-[#173F35]/20 font-bold hover:bg-stone-50 cursor-pointer"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-[#173F35] hover:bg-white cursor-pointer active:scale-90 transition-all"
+                            aria-label={`Decrease ${i.name}`}
                           >
                             <MinusIcon className="w-3 h-3" />
                           </button>
-                          <span className="w-5 text-center font-bold tabular-nums">
+                          <span className="w-6 text-center font-bold tabular-nums text-xs text-[#173F35]">
                             {cart[i.id]}
                           </span>
                           <button
                             onClick={() => changeQty(i.id, 1)}
-                            className="flex h-6 w-6 items-center justify-center rounded border border-[#173F35]/20 font-bold hover:bg-stone-50 cursor-pointer"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-[#173F35] hover:bg-white cursor-pointer active:scale-90 transition-all"
+                            aria-label={`Increase ${i.name}`}
                           >
                             <PlusIcon className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="w-14 text-right font-bold tabular-nums text-[#173F35]">
+
+                        <span className="w-16 text-right font-serif font-bold text-sm tabular-nums text-[#173F35]">
                           ₹{cart[i.id] * i.price}
                         </span>
                       </div>
@@ -1027,33 +1047,33 @@ function TableContent() {
                 </ul>
 
                 {/* Price Calculation Summary */}
-                <div className="mt-3 pt-3 border-t border-[#173F35]/10 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between text-[#242B2A]/70 font-medium">
-                    <span>Subtotal</span>
+                <div className="mt-3 pt-3 border-t border-[#173F35]/10 space-y-1.5 text-xs font-sans">
+                  <div className="flex items-center justify-between text-[#242B2A]/75 font-medium">
+                    <span>Subtotal ({totalCartCount} items)</span>
                     <span className="font-bold tabular-nums text-[#173F35]">
                       ₹{cartSubtotal}
                     </span>
                   </div>
                   {data?.restaurant?.tax_percent ? (
-                    <div className="flex items-center justify-between text-[#242B2A]/70 text-[11px]">
+                    <div className="flex items-center justify-between text-[#242B2A]/65 text-[11px]">
                       <span>Taxes &amp; GST ({data.restaurant.tax_percent}%)</span>
-                      <span className="tabular-nums">₹{taxAmount}</span>
+                      <span className="tabular-nums font-medium">₹{taxAmount}</span>
                     </div>
                   ) : null}
                   {data?.restaurant?.service_charge_percent ? (
-                    <div className="flex items-center justify-between text-[#242B2A]/70 text-[11px]">
+                    <div className="flex items-center justify-between text-[#242B2A]/65 text-[11px]">
                       <span>Service Charge ({data.restaurant.service_charge_percent}%)</span>
-                      <span className="tabular-nums">₹{serviceChargeAmount}</span>
+                      <span className="tabular-nums font-medium">₹{serviceChargeAmount}</span>
                     </div>
                   ) : null}
                   <div className="pt-2 border-t border-dashed border-[#173F35]/20 flex items-center justify-between text-sm font-bold text-[#173F35]">
-                    <span>Total Amount</span>
-                    <span className="tabular-nums text-base">
+                    <span className="font-serif">Total Payable</span>
+                    <span className="tabular-nums font-serif text-lg font-black text-[#173F35]">
                       ₹{grandTotal}
                     </span>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-3">
                     <button
                       onClick={handlePlaceOrder}
                       disabled={placing}
@@ -1072,7 +1092,7 @@ function TableContent() {
                       )}
                     </button>
                     <p className="mt-2 text-center text-[10px] text-[#242B2A]/50">
-                      Dishes are sent directly to the kitchen line with real-time tracking
+                      Dishes are transmitted directly to the kitchen display with real-time tracking
                     </p>
                   </div>
                 </div>
@@ -1080,16 +1100,16 @@ function TableContent() {
             )}
 
             {/* Floating Action Bar */}
-            <div className="flex items-center justify-between rounded-3xl bg-[#173F35] px-4 py-3 text-white shadow-luxury-lg border border-[#E8B95B]/30">
+            <div className="flex items-center justify-between rounded-3xl bg-[#173F35] px-4 py-3 text-white shadow-luxury-lg border border-[#E8B95B]/30 backdrop-blur-md">
               <button
                 onClick={() => setReviewing(!reviewing)}
-                className="text-left cursor-pointer flex items-center gap-3"
+                className="text-left cursor-pointer flex items-center gap-3 select-none"
               >
                 <div className="relative">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 border border-[#E8B95B]/20">
                     <ShoppingBagIcon className="w-5 h-5 text-[#E8B95B]" />
                   </div>
-                  <span className="absolute -top-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#E8B95B] text-[10px] font-bold text-[#173F35]">
+                  <span className="absolute -top-1.5 -right-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#E8B95B] text-[10px] font-black text-[#173F35] shadow-xs">
                     {totalCartCount}
                   </span>
                 </div>
@@ -1106,7 +1126,7 @@ function TableContent() {
               <button
                 onClick={handlePlaceOrder}
                 disabled={placing}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#E8B95B] px-5 py-2.5 font-bold text-sm text-[#173F35] shadow-gold hover:bg-[#d8a84b] active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#E8B95B] via-[#f1ce7c] to-[#d8a84b] px-5 py-2.5 font-bold text-sm text-[#173F35] shadow-gold hover:opacity-95 active:scale-95 disabled:opacity-50 transition-all cursor-pointer border border-white/20 select-none"
               >
                 {placing ? (
                   <>
