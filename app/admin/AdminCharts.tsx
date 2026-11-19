@@ -17,17 +17,47 @@ interface PaymentBreakdownProps {
 export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdownProps) {
   const safeTotal = totalSales > 0 ? totalSales : 1;
 
-  const methods: { key: PaymentMethod; label: string; color: string; bg: string; border: string }[] = [
-    { key: "upi", label: "UPI & QR", color: "#173F35", bg: "bg-[#173F35]", border: "border-[#173F35]" },
-    { key: "cash", label: "Cash Desk", color: "#E8B95B", bg: "bg-[#E8B95B]", border: "border-[#E8B95B]" },
-    { key: "card", label: "Credit / Debit Card", color: "#2E5A44", bg: "bg-[#2E5A44]", border: "border-[#2E5A44]" },
-    { key: "other", label: "Other Methods", color: "#6B7280", bg: "bg-stone-500", border: "border-stone-500" },
+  const methods: {
+    key: PaymentMethod;
+    label: string;
+    color: string;
+    bg: string;
+    border: string;
+  }[] = [
+    {
+      key: "upi",
+      label: "UPI & Instant QR",
+      color: "#173F35",
+      bg: "bg-[#173F35]",
+      border: "border-[#173F35]",
+    },
+    {
+      key: "cash",
+      label: "Cash Desk Settlement",
+      color: "#E8B95B",
+      bg: "bg-[#E8B95B]",
+      border: "border-[#E8B95B]",
+    },
+    {
+      key: "card",
+      label: "Credit / Debit Card",
+      color: "#2E5A44",
+      bg: "bg-[#2E5A44]",
+      border: "border-[#2E5A44]",
+    },
+    {
+      key: "other",
+      label: "Complimentary / Other",
+      color: "#78716C",
+      bg: "bg-stone-500",
+      border: "border-stone-500",
+    },
   ];
 
   // Calculate percentages
   const segments = methods.map((m) => {
     const val = breakdown[m.key] || 0;
-    const pct = Math.round((val / safeTotal) * 100);
+    const pct = totalSales > 0 ? Math.round((val / safeTotal) * 100) : 0;
     return { ...m, val, pct };
   });
 
@@ -37,22 +67,26 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
   let accumulatedPercent = 0;
 
   return (
-    <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+    <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury flex flex-col justify-between h-full">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-serif font-bold text-base text-[#173F35]">Payment Channel Breakdown</h3>
-          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">Distribution across verified settlement types</p>
+          <h3 className="font-serif font-bold text-base text-[#173F35]">
+            Payment Channel Breakdown
+          </h3>
+          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+            Distribution across verified settlement types
+          </p>
         </div>
         <span className="rounded-full bg-[#173F35]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#173F35]">
-          Audit Ready
+          Audit Verified
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center flex-1">
         {/* SVG Donut Visual */}
         <div className="sm:col-span-5 flex flex-col items-center justify-center">
-          <div className="relative w-36 h-36">
-            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+          <div className="relative w-36 h-36 sm:w-40 sm:h-40">
+            <svg width="100%" height="100%" viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               {/* Background circle */}
               <circle
                 cx="50"
@@ -60,7 +94,7 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
                 r={radius}
                 fill="transparent"
                 stroke="#FAF7F0"
-                strokeWidth="14"
+                strokeWidth="13"
               />
               {/* Slices */}
               {segments.map((seg) => {
@@ -77,7 +111,7 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
                     r={radius}
                     fill="transparent"
                     stroke={seg.color}
-                    strokeWidth="14"
+                    strokeWidth="13"
                     strokeDasharray={`${dash} ${circumference}`}
                     strokeDashoffset={strokeDashoffset}
                     strokeLinecap="round"
@@ -87,11 +121,11 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
               })}
             </svg>
             {/* Center label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-2">
               <span className="text-[9px] font-bold uppercase tracking-wider text-[#242B2A]/50">
-                Total
+                Gross Invoiced
               </span>
-              <span className="font-serif font-bold text-sm text-[#173F35] tabular-nums">
+              <span className="font-serif font-bold text-base text-[#173F35] tabular-nums leading-tight">
                 ₹{totalSales.toLocaleString("en-IN")}
               </span>
             </div>
@@ -104,14 +138,16 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
             <div key={seg.key} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${seg.bg}`} />
-                  <span className="font-semibold text-[#242B2A]">{seg.label}</span>
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${seg.bg}`} />
+                  <span className="font-semibold text-[#242B2A] truncate">
+                    {seg.label}
+                  </span>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span className="font-bold text-[#173F35] tabular-nums">
                     ₹{seg.val.toLocaleString("en-IN")}
                   </span>
-                  <span className="text-[10px] text-[#242B2A]/60 ml-1.5 font-medium">
+                  <span className="text-[10px] text-[#242B2A]/60 ml-1.5 font-medium tabular-nums">
                     ({seg.pct}%)
                   </span>
                 </div>
@@ -124,6 +160,12 @@ export function PaymentBreakdownChart({ breakdown, totalSales }: PaymentBreakdow
               </div>
             </div>
           ))}
+
+          {totalSales === 0 && (
+            <p className="text-[11px] text-center text-[#242B2A]/50 pt-2 italic">
+              No transactions recorded in this window.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -136,23 +178,28 @@ interface CategorySalesProps {
 }
 
 export function CategorySalesBarChart({ categories, totalSales }: CategorySalesProps) {
-  const maxRevenue = categories.length > 0
-    ? Math.max(...categories.map((c) => c.revenue), 1)
-    : 1;
+  const maxRevenue =
+    categories.length > 0
+      ? Math.max(...categories.map((c) => c.revenue), 1)
+      : 1;
 
   return (
-    <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
+    <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury flex flex-col justify-between h-full">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-serif font-bold text-base text-[#173F35]">Category Sales Performance</h3>
-          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">Revenue and dishes ordered per culinary division</p>
+          <h3 className="font-serif font-bold text-base text-[#173F35]">
+            Category Sales Performance
+          </h3>
+          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+            Revenue and dishes ordered per culinary division
+          </p>
         </div>
         <span className="text-xs font-serif font-bold text-[#173F35] tabular-nums">
           {categories.length} Categories
         </span>
       </div>
 
-      <div className="space-y-3.5">
+      <div className="space-y-3.5 flex-1">
         {categories.slice(0, 6).map((cat, idx) => {
           const pct = Math.round((cat.revenue / (totalSales || 1)) * 100);
           const barWidth = Math.round((cat.revenue / maxRevenue) * 100);
@@ -160,20 +207,22 @@ export function CategorySalesBarChart({ categories, totalSales }: CategorySalesP
           return (
             <div key={cat.category} className="group">
               <div className="flex items-center justify-between text-xs mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-[#FAF7F0] border border-[#173F35]/10 text-[10px] font-bold text-[#173F35]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[#FAF7F0] border border-[#173F35]/10 text-[10px] font-bold text-[#173F35]">
                     {idx + 1}
                   </span>
-                  <span className="font-serif font-semibold text-[#173F35]">{cat.category}</span>
-                  <span className="text-[10px] text-[#242B2A]/50">
-                    • {cat.quantity} ordered
+                  <span className="font-serif font-bold text-[#173F35] truncate">
+                    {cat.category}
+                  </span>
+                  <span className="text-[10px] text-[#242B2A]/50 shrink-0">
+                    &bull; {cat.quantity} ordered
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span className="font-bold text-[#173F35] tabular-nums">
                     ₹{cat.revenue.toLocaleString("en-IN")}
                   </span>
-                  <span className="text-[10px] text-[#242B2A]/60 ml-1.5 font-medium">
+                  <span className="text-[10px] text-[#242B2A]/60 ml-1.5 font-medium tabular-nums">
                     ({pct}%)
                   </span>
                 </div>
@@ -204,16 +253,21 @@ interface TableUtilizationProps {
 }
 
 export function TableRevenueMatrixChart({ tables }: TableUtilizationProps) {
-  const maxTableRevenue = tables.length > 0
-    ? Math.max(...tables.map((t) => t.total), 1)
-    : 1;
+  const maxTableRevenue =
+    tables.length > 0
+      ? Math.max(...tables.map((t) => t.total), 1)
+      : 1;
 
   return (
     <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-serif font-bold text-base text-[#173F35]">Table Revenue Matrix</h3>
-          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">Turnover and aggregate settlement by dining table</p>
+          <h3 className="font-serif font-bold text-base text-[#173F35]">
+            Table Revenue Matrix
+          </h3>
+          <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
+            Turnover and aggregate settlement by dining table
+          </p>
         </div>
         <span className="text-xs font-mono text-[#242B2A]/50 font-medium">
           Authoritative Session Ledger
@@ -230,22 +284,24 @@ export function TableRevenueMatrixChart({ tables }: TableUtilizationProps) {
             >
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/50">
-                  Dine-in
+                  Dine-in Station
                 </span>
-                <p className="font-serif font-bold text-sm text-[#173F35] mt-0.5">Table {t.label}</p>
+                <p className="font-serif font-bold text-sm text-[#173F35] mt-0.5">
+                  Table {t.label}
+                </p>
               </div>
 
               <div className="mt-3">
-                <p className="text-base font-bold text-[#173F35] tabular-nums">
+                <p className="text-base font-serif font-bold text-[#173F35] tabular-nums">
                   ₹{t.total.toLocaleString("en-IN")}
                 </p>
                 <div className="flex items-center justify-between text-[10px] text-[#242B2A]/60 mt-1">
                   <span>{t.count} bills</span>
-                  <span className="font-medium">{ratio}% peak</span>
+                  <span className="font-medium tabular-nums">{ratio}% peak</span>
                 </div>
                 <div className="mt-1.5 h-1 w-full rounded-full bg-black/5 overflow-hidden">
                   <div
-                    className="h-full bg-[#173F35] rounded-full"
+                    className="h-full bg-[#173F35] rounded-full transition-all duration-500"
                     style={{ width: `${ratio}%` }}
                   />
                 </div>

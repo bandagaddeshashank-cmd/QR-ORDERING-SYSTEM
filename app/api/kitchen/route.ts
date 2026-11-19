@@ -31,8 +31,8 @@ const VALID_TRANSITIONS: Record<string, OrderStatus[]> = {
 };
 
 export async function GET(req: Request) {
+  await connection();
   try {
-    await connection();
     const { staff, errorResponse } = await requireStaff(req);
     if (errorResponse) return errorResponse;
 

@@ -1,8 +1,10 @@
+import { connection } from "next/server";
 import { supabaseAdmin, requireManager, apiError, apiSuccess } from "@/lib/serverAuth";
 import { roundMoney } from "@/lib/dbHelpers";
 import type { PaymentMethod } from "@/lib/types";
 
 export async function GET(req: Request) {
+  await connection();
   try {
     const { manager, errorResponse } = await requireManager(req);
     if (errorResponse) return errorResponse;

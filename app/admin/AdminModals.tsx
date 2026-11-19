@@ -51,13 +51,18 @@ export function DishModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-luxury-lg border border-[#173F35]/10 my-8">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isEditing ? "Edit Culinary Item" : "Add New Dish to Catalog"}
+    >
+      <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-luxury-lg border border-[#173F35]/10 my-8 animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-4 mb-6">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#173F35]/60">
-              Menu Engineering
+              Menu Engineering &amp; Operations
             </span>
             <h3 className="text-xl font-serif font-bold text-[#173F35]">
               {isEditing ? "Edit Culinary Item" : "Add New Dish to Catalog"}
@@ -66,6 +71,7 @@ export function DishModal({
           <button
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FAF7F0] text-[#242B2A]/70 hover:bg-[#173F35] hover:text-white transition-colors cursor-pointer"
+            aria-label="Close dialog"
           >
             <CloseIcon className="w-4 h-4" />
           </button>
@@ -82,10 +88,10 @@ export function DishModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Royal Shahi Paneer"
+                  placeholder="e.g. Royal Truffle Paneer"
                   value={dishForm.name}
                   onChange={(e) => onChangeDishForm({ ...dishForm, name: e.target.value })}
-                  className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                  className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-bold text-[#173F35] focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
                 />
               </div>
 
@@ -101,7 +107,7 @@ export function DishModal({
                     list="category-suggestions"
                     value={dishForm.category}
                     onChange={(e) => onChangeDishForm({ ...dishForm, category: e.target.value })}
-                    className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-medium focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                    className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
                   />
                   <datalist id="category-suggestions">
                     {categories.filter((c) => c !== "All").map((c) => (
@@ -130,7 +136,7 @@ export function DishModal({
                     onChange={(e) =>
                       onChangeDishForm({ ...dishForm, price: parseFloat(e.target.value) || 0 })
                     }
-                    className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-bold tabular-nums focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                    className="h-11 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-bold tabular-nums text-[#173F35] focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
                   />
                 </div>
               </div>
@@ -146,7 +152,7 @@ export function DishModal({
                     className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold border transition-all cursor-pointer ${
                       dishForm.is_veg
                         ? "border-emerald-700 bg-emerald-50 text-emerald-900 shadow-xs"
-                        : "border-[#173F35]/10 bg-[#FAF7F0] text-[#242B2A]/60"
+                        : "border-[#173F35]/10 bg-[#FAF7F0] text-[#242B2A]/60 hover:bg-stone-50"
                     }`}
                   >
                     <span className="h-2 w-2 rounded-full bg-emerald-600" />
@@ -159,7 +165,7 @@ export function DishModal({
                     className={`flex items-center justify-center gap-2 rounded-xl p-2.5 text-xs font-bold border transition-all cursor-pointer ${
                       !dishForm.is_veg
                         ? "border-rose-700 bg-rose-50 text-rose-900 shadow-xs"
-                        : "border-[#173F35]/10 bg-[#FAF7F0] text-[#242B2A]/60"
+                        : "border-[#173F35]/10 bg-[#FAF7F0] text-[#242B2A]/60 hover:bg-stone-50"
                     }`}
                   >
                     <span className="h-2 w-2 rounded-full bg-rose-600" />
@@ -170,14 +176,14 @@ export function DishModal({
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
-                  Culinary Description & Ingredients
+                  Culinary Description &amp; Ingredients
                 </label>
                 <textarea
                   rows={3}
                   value={dishForm.description}
                   onChange={(e) => onChangeDishForm({ ...dishForm, description: e.target.value })}
                   placeholder="Rich cashew cream sauce, slow-simmered cottage cheese with aromatic spices..."
-                  className="w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] p-3 text-xs font-medium focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                  className="w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] p-3 text-xs font-medium focus:border-[#173F35] focus:bg-white focus:outline-none transition-all leading-relaxed"
                 />
               </div>
 
@@ -191,7 +197,7 @@ export function DishModal({
                   onChange={(e) =>
                     onChangeDishForm({ ...dishForm, sort_order: parseInt(e.target.value, 10) || 0 })
                   }
-                  className="h-10 w-32 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3 text-xs font-medium focus:border-[#173F35] focus:outline-none"
+                  className="h-10 w-32 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3 text-xs font-semibold focus:border-[#173F35] focus:outline-none"
                 />
               </div>
             </div>
@@ -215,7 +221,7 @@ export function DishModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         <DietaryBadge isVeg={dishForm.is_veg} />
-                        <span className="text-[10px] uppercase font-bold text-[#173F35]/60">
+                        <span className="text-[10px] uppercase font-bold text-[#173F35]/60 truncate">
                           {dishForm.category || "Category"}
                         </span>
                       </div>
@@ -228,7 +234,7 @@ export function DishModal({
                         {dishForm.description || "Flavor notes and description will appear here..."}
                       </p>
 
-                      <p className="mt-2 text-sm font-bold text-[#173F35] tabular-nums">
+                      <p className="mt-2 text-sm font-serif font-bold text-[#173F35] tabular-nums">
                         ₹{Number(dishForm.price || 0).toFixed(2)}
                       </p>
                     </div>
@@ -236,7 +242,7 @@ export function DishModal({
                 </div>
               </div>
 
-              <div className="mt-4 rounded-xl bg-white/60 p-3 border border-[#173F35]/10 text-[11px] text-[#242B2A]/70 flex items-center gap-2">
+              <div className="mt-4 rounded-xl bg-white/70 p-3 border border-[#173F35]/10 text-[11px] text-[#242B2A]/70 flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-[#E8B95B] shrink-0" />
                 <span>Changes save instantly to the cloud and reflect on customer table QR menus.</span>
               </div>
@@ -255,9 +261,18 @@ export function DishModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-[#173F35] px-7 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-[#173F35] px-7 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer border border-[#E8B95B]/30"
             >
-              {isSubmitting ? "Saving Dish..." : isEditing ? "Update Item" : "Create Dish"}
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#E8B95B] border-t-transparent" />
+                  <span>Saving Dish...</span>
+                </span>
+              ) : isEditing ? (
+                "Update Dish"
+              ) : (
+                "Create Dish"
+              )}
             </button>
           </div>
         </form>
@@ -289,13 +304,19 @@ export function TableModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add Dining Table"
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10 animate-slide-up">
         <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-3 mb-4">
           <h3 className="text-lg font-serif font-bold text-[#173F35]">Add Dining Table</h3>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FAF7F0] text-[#242B2A]/70 hover:bg-[#173F35] hover:text-white transition-colors cursor-pointer"
+            aria-label="Close dialog"
           >
             <CloseIcon className="w-4 h-4" />
           </button>
@@ -324,14 +345,14 @@ export function TableModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-10 rounded-xl border border-[#173F35]/20 px-4 text-xs font-semibold text-[#242B2A]/70 hover:bg-[#FAF7F0] cursor-pointer"
+              className="h-10 rounded-xl border border-[#173F35]/20 px-4 text-xs font-semibold text-[#242B2A]/70 hover:bg-[#FAF7F0] cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !label.trim()}
-              className="h-10 rounded-xl bg-[#173F35] px-5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 cursor-pointer transition-all"
+              className="h-10 rounded-xl bg-[#173F35] px-5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 cursor-pointer transition-all border border-[#E8B95B]/30"
             >
               {isSubmitting ? "Generating..." : "Create Table"}
             </button>
@@ -356,18 +377,23 @@ export function QrModal({ table, qrDataUrl, onClose, onCopyLink }: QrModalProps)
   if (!table) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10 text-center">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Official QR Code for Table ${table.label}`}
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10 text-center animate-slide-up">
         {/* Brand Crest */}
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#E8B95B] bg-[#173F35] px-3 py-0.5 rounded-full inline-block mb-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#E8B95B] bg-[#173F35] px-3 py-0.5 rounded-full inline-block mb-2 shadow-xs">
           GREEN EMBASSY
         </span>
 
         <h3 className="text-2xl font-serif font-bold text-[#173F35]">
           Table {table.label}
         </h3>
-        <p className="text-xs text-[#242B2A]/60 mt-0.5 mb-4">
-          Official Dine-in Ordering QR Code
+        <p className="text-xs text-[#242B2A]/60 mt-0.5 mb-4 font-sans">
+          Official Dine-in Tableside QR Code
         </p>
 
         {/* QR Card Container */}
@@ -406,7 +432,7 @@ export function QrModal({ table, qrDataUrl, onClose, onCopyLink }: QrModalProps)
             <a
               href={qrDataUrl}
               download={`GreenEmbassy_Table_${table.label}_QR.png`}
-              className="inline-flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-colors cursor-pointer border border-[#E8B95B]/30"
             >
               <DownloadIcon className="w-3.5 h-3.5" />
               <span>Download PNG</span>
@@ -457,8 +483,13 @@ export function ConfirmDialog({ state, onCancel }: ConfirmDialogProps) {
   if (!state.isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10 text-center">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.title}
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-luxury-lg border border-[#173F35]/10 text-center animate-slide-up">
         <div
           className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${
             state.isDanger ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"
@@ -468,7 +499,7 @@ export function ConfirmDialog({ state, onCancel }: ConfirmDialogProps) {
         </div>
 
         <h3 className="text-lg font-serif font-bold text-[#173F35] mb-2">{state.title}</h3>
-        <p className="text-xs text-[#242B2A]/70 leading-relaxed mb-6">{state.message}</p>
+        <p className="text-xs text-[#242B2A]/70 leading-relaxed mb-6 font-sans">{state.message}</p>
 
         <div className="flex gap-2">
           <button
@@ -509,7 +540,12 @@ export function PrintSheetModal({ isOpen, onClose, allQrUrls }: PrintSheetModalP
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Printable Table Tent Sheets"
+    >
       <div className="flex justify-between items-center mb-6 print:hidden border-b border-[#173F35]/10 pb-4">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-[#173F35]/60">
@@ -526,7 +562,7 @@ export function PrintSheetModal({ isOpen, onClose, allQrUrls }: PrintSheetModalP
         <div className="flex gap-3">
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer transition-colors"
+            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer transition-colors border border-[#E8B95B]/30"
           >
             <PrinterIcon className="w-3.5 h-3.5" />
             <span>Send to Printer</span>
@@ -546,14 +582,14 @@ export function PrintSheetModal({ isOpen, onClose, allQrUrls }: PrintSheetModalP
             key={t.label}
             className="rounded-3xl border-2 border-dashed border-[#173F35]/30 p-6 text-center bg-[#FAF7F0] page-break-inside-avoid shadow-luxury"
           >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#E8B95B] bg-[#173F35] px-3 py-0.5 rounded-full inline-block mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#E8B95B] bg-[#173F35] px-3 py-0.5 rounded-full inline-block mb-2 shadow-xs">
               GREEN EMBASSY
             </span>
             <h4 className="text-3xl font-serif font-bold text-[#173F35] mb-1">
               Table {t.label}
             </h4>
-            <p className="text-xs text-[#242B2A]/70 mb-4">
-              Scan with your smartphone camera to view menu & order
+            <p className="text-xs text-[#242B2A]/70 mb-4 font-sans">
+              Scan with your smartphone camera to view menu &amp; order
             </p>
 
             <div className="mx-auto h-44 w-44 rounded-2xl bg-white p-3 shadow-luxury border border-[#173F35]/10 flex items-center justify-center">
@@ -568,7 +604,7 @@ export function PrintSheetModal({ isOpen, onClose, allQrUrls }: PrintSheetModalP
             </div>
 
             <p className="mt-3 text-[10px] font-mono text-[#242B2A]/60">
-              No app download required • Instant live ordering
+              No app download required &bull; Instant live ordering
             </p>
           </div>
         ))}

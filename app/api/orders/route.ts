@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { supabaseAdmin, apiError, apiSuccess } from "@/lib/serverAuth";
 import {
   resolveTableFromToken,
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  await connection();
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("t");

@@ -44,14 +44,16 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
     setBusy(false);
   };
 
-  const shell = "min-h-screen bg-[#FAF7F0] p-6 text-[#242B2A]";
+  const shell = "min-h-screen bg-[#101514] p-6 text-white";
 
   if (!ready) {
     return (
       <div className={`${shell} flex items-center justify-center`}>
         <div className="text-center">
-          <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-[#173F35] border-t-transparent mb-3" />
-          <p className="text-sm font-serif font-semibold text-[#173F35]">Connecting to Kitchen Station...</p>
+          <span className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-[#E8B95B] border-t-transparent mb-3" />
+          <p className="text-sm font-serif font-semibold text-[#E8B95B]">
+            Connecting to Kitchen Station...
+          </p>
         </div>
       </div>
     );
@@ -60,23 +62,27 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   if (!session) {
     return (
       <div className={`${shell} flex flex-col items-center justify-center`}>
-        <main className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-luxury-lg border border-[#173F35]/10 text-center">
-          <Image
-            src="/logo.png"
-            alt="Green Embassy Logo"
-            width={100}
-            height={60}
-            className="mx-auto mb-4 h-16 w-auto object-contain"
-            priority
-          />
-          <h1 className="text-2xl font-serif font-bold text-[#173F35]">Kitchen Display</h1>
-          <p className="text-xs text-[#242B2A]/70 mt-1 mb-6">
-            Authorized culinary & service staff access only
+        <main className="w-full max-w-sm rounded-3xl bg-[#161E1C] p-8 shadow-2xl border border-white/10 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#173F35] border border-[#E8B95B]/40 shadow-inner">
+            <Image
+              src="/logo.png"
+              alt="Green Embassy Logo"
+              width={64}
+              height={40}
+              className="h-9 w-auto object-contain"
+              priority
+            />
+          </div>
+          <h1 className="text-2xl font-serif font-extrabold text-white">
+            Kitchen Display Station
+          </h1>
+          <p className="text-xs text-stone-400 mt-1 mb-6">
+            Authorized culinary &amp; service staff access only
           </p>
 
           <form onSubmit={login} className="space-y-4 text-left">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-300 mb-1">
                 Staff Email
               </label>
               <input
@@ -86,13 +92,13 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="chef@greenembassy.com"
-                className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-medium focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                className="h-12 w-full rounded-xl border border-white/15 bg-[#1C2523] px-3.5 text-sm font-medium text-white placeholder:text-stone-500 focus:border-[#E8B95B] focus:bg-[#202b28] focus:outline-none transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1">
-                Password
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-300 mb-1">
+                Station Password
               </label>
               <input
                 type="password"
@@ -101,12 +107,12 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-medium focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                className="h-12 w-full rounded-xl border border-white/15 bg-[#1C2523] px-3.5 text-sm font-medium text-white placeholder:text-stone-500 focus:border-[#E8B95B] focus:bg-[#202b28] focus:outline-none transition-all"
               />
             </div>
 
             {error && (
-              <p className="rounded-xl bg-rose-50 p-2.5 text-xs font-semibold text-rose-800 border border-rose-200">
+              <p className="rounded-xl bg-rose-950/80 p-2.5 text-xs font-semibold text-rose-300 border border-rose-500/80">
                 {error}
               </p>
             )}
@@ -114,9 +120,9 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
             <button
               type="submit"
               disabled={busy}
-              className="inline-flex items-center justify-center gap-2 h-12 w-full rounded-xl bg-[#173F35] font-bold text-sm text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all mt-2 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 h-12 w-full rounded-xl bg-[#173F35] font-bold text-sm text-[#E8B95B] shadow-luxury hover:bg-[#102e26] border border-[#E8B95B]/40 disabled:opacity-50 transition-all mt-2 cursor-pointer"
             >
-              <LockIcon className="w-4 h-4" />
+              <LockIcon className="w-4 h-4 text-[#E8B95B]" />
               <span>{busy ? "Authenticating..." : "Access Kitchen Station"}</span>
             </button>
           </form>
@@ -129,14 +135,16 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   if (role !== "manager" && role !== "staff" && role !== "platform_admin") {
     return (
       <div className={`${shell} flex items-center justify-center`}>
-        <main className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-luxury-lg border border-rose-200 text-center">
-          <h2 className="text-xl font-serif font-bold text-rose-800 mb-2">Access Restricted</h2>
-          <p className="text-sm text-[#242B2A]/70 mb-6 leading-relaxed">
+        <main className="w-full max-w-sm rounded-3xl bg-[#161E1C] p-8 shadow-2xl border border-rose-500/50 text-center">
+          <h2 className="text-xl font-serif font-bold text-rose-400 mb-2">
+            Access Restricted
+          </h2>
+          <p className="text-sm text-stone-300 mb-6 leading-relaxed">
             This account ({session.user.email}) is not assigned as kitchen staff or manager.
           </p>
           <button
             onClick={() => supabase.auth.signOut({ scope: "local" })}
-            className="inline-flex items-center justify-center gap-2 h-11 w-full rounded-xl border border-[#173F35]/20 font-semibold text-sm text-[#173F35] hover:bg-[#173F35]/5 cursor-pointer transition-colors"
+            className="inline-flex items-center justify-center gap-2 h-11 w-full rounded-xl border border-white/20 bg-white/5 font-semibold text-sm text-white hover:bg-white/10 cursor-pointer transition-colors"
           >
             <LogOutIcon className="w-4 h-4" />
             <span>Sign Out</span>

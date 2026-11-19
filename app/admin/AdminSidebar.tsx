@@ -56,7 +56,7 @@ export default function AdminSidebar({
   }[] = [
     {
       id: "overview",
-      label: "Dashboard",
+      label: "Executive Dashboard",
       icon: GridIcon,
     },
     {
@@ -64,7 +64,10 @@ export default function AdminSidebar({
       label: "Tables & QR Center",
       icon: QrCodeIcon,
       badge: activeSessionsCount > 0 ? `${activeSessionsCount} Active` : `${tableCount}`,
-      badgeColor: activeSessionsCount > 0 ? "bg-[#E8B95B] text-[#173F35]" : "bg-white/10 text-white/70",
+      badgeColor:
+        activeSessionsCount > 0
+          ? "bg-[#E8B95B] text-[#173F35]"
+          : "bg-white/10 text-white/70",
     },
     {
       id: "menu",
@@ -95,23 +98,23 @@ export default function AdminSidebar({
       {isMobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden transition-opacity"
         />
       )}
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-[#173F35] text-[#FAF7F0] transition-all duration-300 ease-in-out border-r border-white/10 shadow-luxury-lg ${
+        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-[#173F35] text-[#FAF7F0] transition-all duration-300 ease-in-out border-r border-white/10 shadow-luxury-lg select-none ${
           isCollapsed ? "w-20" : "w-64"
         } ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
+        <div className="flex items-center justify-between px-4 py-4.5 border-b border-white/10 relative">
           <div className="flex items-center gap-3 overflow-hidden">
             {/* Monogram Crest */}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E8B95B] to-[#c99b44] text-[#173F35] font-serif font-extrabold text-lg shadow-luxury">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E8B95B] via-[#dfad4c] to-[#c99b44] text-[#173F35] font-serif font-black text-base shadow-luxury border border-white/20">
               GE
             </div>
 
@@ -120,8 +123,9 @@ export default function AdminSidebar({
                 <span className="block font-serif font-bold text-sm tracking-wide text-[#E8B95B] truncate">
                   {restaurantName || "GREEN EMBASSY"}
                 </span>
-                <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-white/60">
-                  Operations Console
+                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Enterprise Console
                 </span>
               </div>
             )}
@@ -131,13 +135,14 @@ export default function AdminSidebar({
           <button
             onClick={onCloseMobile}
             className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+            aria-label="Close navigation sidebar"
           >
             <CloseIcon className="w-4 h-4" />
           </button>
         </div>
 
         {/* Main Navigation */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="space-y-1">
             {!isCollapsed && (
               <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-white/40 mb-2">
@@ -159,7 +164,7 @@ export default function AdminSidebar({
                   title={isCollapsed ? item.label : undefined}
                   className={`group relative flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
                     isActive
-                      ? "bg-white/15 text-[#E8B95B] shadow-inner font-bold"
+                      ? "bg-gradient-to-r from-white/15 to-white/5 text-[#E8B95B] border border-[#E8B95B]/40 shadow-xs font-bold"
                       : "text-white/70 hover:bg-white/8 hover:text-white"
                   }`}
                 >
@@ -175,7 +180,9 @@ export default function AdminSidebar({
 
                   {!isCollapsed && item.badge !== undefined && (
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${item.badgeColor || "bg-white/10 text-white"}`}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${
+                        item.badgeColor || "bg-white/10 text-white"
+                      }`}
                     >
                       {item.badge}
                     </span>
@@ -200,28 +207,28 @@ export default function AdminSidebar({
 
             <Link
               href="/kitchen"
-              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/8 hover:text-white transition-all"
+              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/75 hover:bg-white/8 hover:text-white transition-all group"
               title="Kitchen Display System"
             >
-              <ChefHatIcon className="h-4.5 w-4.5 shrink-0 text-amber-300" />
+              <ChefHatIcon className="h-4.5 w-4.5 shrink-0 text-amber-300 transition-transform group-hover:scale-110" />
               {!isCollapsed && <span className="truncate">Kitchen KDS</span>}
             </Link>
 
             <Link
               href="/billing"
-              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/8 hover:text-white transition-all"
+              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/75 hover:bg-white/8 hover:text-white transition-all group"
               title="Cashier & Billing Desk"
             >
-              <ReceiptIcon className="h-4.5 w-4.5 shrink-0 text-emerald-300" />
+              <ReceiptIcon className="h-4.5 w-4.5 shrink-0 text-emerald-300 transition-transform group-hover:scale-110" />
               {!isCollapsed && <span className="truncate">Billing Desk</span>}
             </Link>
 
             <Link
               href="/"
-              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/8 hover:text-white transition-all"
-              title="Brand Showcase"
+              className="flex items-center gap-3 rounded-2xl px-3 py-2 text-xs font-medium text-white/75 hover:bg-white/8 hover:text-white transition-all group"
+              title="Public Brand Showcase"
             >
-              <SmartphoneIcon className="h-4.5 w-4.5 shrink-0 text-sky-300" />
+              <SmartphoneIcon className="h-4.5 w-4.5 shrink-0 text-sky-300 transition-transform group-hover:scale-110" />
               {!isCollapsed && <span className="truncate">Public Portal</span>}
             </Link>
           </div>
@@ -237,7 +244,7 @@ export default function AdminSidebar({
                 </span>
                 <span className="flex items-center gap-1.5 text-[9px] text-[#E8B95B] font-semibold">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Authenticated
+                  Authenticated Role
                 </span>
               </div>
 
@@ -245,6 +252,7 @@ export default function AdminSidebar({
                 onClick={handleSignOut}
                 title="Sign Out"
                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-rose-900/60 hover:text-rose-200 transition-colors cursor-pointer"
+                aria-label="Sign out"
               >
                 <LogOutIcon className="w-3.5 h-3.5" />
               </button>
@@ -257,6 +265,7 @@ export default function AdminSidebar({
                 onClick={handleSignOut}
                 title="Sign Out"
                 className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-rose-900/60 hover:text-rose-200 transition-colors cursor-pointer"
+                aria-label="Sign out"
               >
                 <LogOutIcon className="w-4 h-4" />
               </button>
@@ -267,6 +276,7 @@ export default function AdminSidebar({
           <button
             onClick={onToggleCollapse}
             className="hidden md:flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-1.5 text-[11px] font-semibold text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? (
               <ChevronRightIcon className="w-4 h-4" />

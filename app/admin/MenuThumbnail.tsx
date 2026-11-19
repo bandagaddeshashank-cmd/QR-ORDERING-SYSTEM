@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import Image from "next/image";
 import { UtensilsIcon, FlameIcon, SparklesIcon } from "@/components/ui/icons";
 
 interface MenuThumbnailProps {
@@ -8,6 +9,7 @@ interface MenuThumbnailProps {
   category: string;
   isVeg: boolean;
   size?: "sm" | "md" | "lg";
+  imageUrl?: string | null;
 }
 
 export default function MenuThumbnail({
@@ -15,7 +17,10 @@ export default function MenuThumbnail({
   category,
   isVeg,
   size = "md",
+  imageUrl,
 }: MenuThumbnailProps) {
+  const [imgError, setImgError] = useState(false);
+
   const sizeClasses = {
     sm: "w-10 h-10 rounded-xl text-xs",
     md: "w-14 h-14 rounded-2xl text-sm",
@@ -29,21 +34,56 @@ export default function MenuThumbnail({
   }[size];
 
   // Pick category styling
-  const lowerCat = category.toLowerCase();
-  const isStarter = lowerCat.includes("starter") || lowerCat.includes("appetizer") || lowerCat.includes("snack");
-  const isDessert = lowerCat.includes("dessert") || lowerCat.includes("sweet") || lowerCat.includes("ice");
-  const isBeverage = lowerCat.includes("drink") || lowerCat.includes("beverage") || lowerCat.includes("juice") || lowerCat.includes("mocktail");
+  const lowerCat = (category || "").toLowerCase();
+  const isStarter =
+    lowerCat.includes("starter") ||
+    lowerCat.includes("appetizer") ||
+    lowerCat.includes("snack") ||
+    lowerCat.includes("tandoor");
+  const isDessert =
+    lowerCat.includes("dessert") ||
+    lowerCat.includes("sweet") ||
+    lowerCat.includes("ice");
+  const isBeverage =
+    lowerCat.includes("drink") ||
+    lowerCat.includes("beverage") ||
+    lowerCat.includes("juice") ||
+    lowerCat.includes("mocktail");
+
+  // If real image is provided and hasn't failed to load
+  if (imageUrl && !imgError) {
+    return (
+      <div
+        className={`relative shrink-0 overflow-hidden border border-[#173F35]/15 shadow-xs transition-transform group-hover:scale-105 ${sizeClasses}`}
+      >
+        <Image
+          src={imageUrl}
+          alt={name}
+          fill
+          unoptimized
+          className="object-cover"
+          onError={() => setImgError(true)}
+        />
+        <div
+          className={`absolute top-1 right-1 h-2 w-2 rounded-full border border-white shadow-xs z-10 ${
+            isVeg ? "bg-emerald-600" : "bg-rose-700"
+          }`}
+          title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       className={`relative shrink-0 flex items-center justify-center border overflow-hidden shadow-xs transition-transform group-hover:scale-105 ${sizeClasses} ${
         isVeg
-          ? "border-emerald-600/30 bg-gradient-to-br from-[#173F35]/15 via-emerald-950/10 to-[#FAF7F0]"
-          : "border-amber-700/30 bg-gradient-to-br from-[#173F35]/20 via-amber-950/10 to-[#FAF7F0]"
+          ? "border-emerald-600/30 bg-gradient-to-br from-[#173F35]/20 via-emerald-950/10 to-[#FAF7F0]"
+          : "border-amber-700/30 bg-gradient-to-br from-[#173F35]/25 via-amber-950/10 to-[#FAF7F0]"
       }`}
     >
       {/* Background pattern */}
-      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#173F35_1px,transparent_1px)] [background-size:6px_6px]" />
+      <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#173F35_1px,transparent_1px)] [background-size:6px_6px]" />
 
       {/* Culinary Icon */}
       <div className="relative z-10 text-[#173F35]">
@@ -55,7 +95,7 @@ export default function MenuThumbnail({
         )}
       </div>
 
-      {/* Tiny dietary tag indicator on top corner */}
+      {/* Dietary tag indicator on top corner */}
       <div
         className={`absolute top-1 right-1 h-2 w-2 rounded-full border border-white shadow-xs ${
           isVeg ? "bg-emerald-600" : "bg-rose-700"
@@ -65,7 +105,7 @@ export default function MenuThumbnail({
 
       {/* Subtle bottom letter badge */}
       <span className="absolute bottom-0.5 inset-x-0 text-center text-[8px] font-bold tracking-tight text-[#173F35]/70 uppercase truncate px-0.5">
-        {name.slice(0, 3)}
+        {(name || "Dish").slice(0, 3)}
       </span>
     </div>
   );

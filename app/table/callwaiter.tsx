@@ -56,16 +56,24 @@ export default function CallWaiter({
       onClick={call}
       disabled={busy || called}
       aria-label={called ? "Waitstaff has been notified" : "Call waitstaff to table"}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer shadow-sm ${
+      className={`inline-flex items-center gap-1.5 min-h-[36px] rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer shadow-xs select-none ${
         called
-          ? "bg-[#E8B95B]/20 text-[#E8B95B] border border-[#E8B95B]/50 cursor-default"
-          : "bg-white/10 text-white hover:bg-white/20 hover:text-[#E8B95B] border border-white/20 active:scale-95"
+          ? "bg-[#E8B95B]/25 text-[#E8B95B] border border-[#E8B95B]/60 shadow-xs cursor-default font-bold"
+          : failed
+          ? "bg-rose-900/60 text-rose-200 border border-rose-400 active:scale-95"
+          : busy
+          ? "bg-white/10 text-white/70 border border-white/20 cursor-wait"
+          : "bg-white/10 text-[#FAF7F0] hover:bg-white/20 hover:text-[#E8B95B] border border-white/25 active:scale-95 backdrop-blur-xs"
       }`}
     >
       {called ? (
         <>
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E8B95B] opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E8B95B]" />
+          </span>
           <CheckIcon className="w-3.5 h-3.5 text-[#E8B95B]" />
-          <span>Staff Notified</span>
+          <span>Staff Alerted</span>
         </>
       ) : busy ? (
         <>
@@ -74,7 +82,7 @@ export default function CallWaiter({
         </>
       ) : (
         <>
-          <BellIcon className="w-3.5 h-3.5 text-[#E8B95B]" />
+          <BellIcon className="w-3.5 h-3.5 text-[#E8B95B] shrink-0" />
           <span>{failed ? "Retry Call" : "Call Staff"}</span>
         </>
       )}

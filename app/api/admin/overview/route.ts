@@ -1,6 +1,8 @@
+import { connection } from "next/server";
 import { supabaseAdmin, requireManager, apiError, apiSuccess } from "@/lib/serverAuth";
 
 export async function GET(req: Request) {
+  await connection();
   try {
     const { manager, errorResponse } = await requireManager(req);
     if (errorResponse) return errorResponse;

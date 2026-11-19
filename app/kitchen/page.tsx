@@ -17,6 +17,8 @@ import {
   ArrowRightIcon,
   AlertCircleIcon,
   FlameIcon,
+  ChefHatIcon,
+  UtensilsIcon,
 } from "@/components/ui/icons";
 
 type Line = {
@@ -53,7 +55,7 @@ function playKitchenChime() {
     const ctx = new AudioContextClass();
     const now = ctx.currentTime;
 
-    // Pleasant high-clarity restaurant service bell (F5 -> A5)
+    // Pleasant high-clarity restaurant service bell (F5 -> A5 harmonics)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = "sine";
@@ -235,8 +237,8 @@ function KitchenKDS() {
     <div className="min-h-screen bg-[#101514] text-stone-100 p-4 sm:p-6 flex flex-col font-sans selection:bg-[#E8B95B] selection:text-[#173F35]">
       {/* 1. TOP KDS COMMAND BAR */}
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-[#161E1C] px-5 py-4 border border-white/10 shadow-2xl">
-        <div className="flex items-center gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#173F35] border border-[#E8B95B]/40 text-[#E8B95B] shadow-inner">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#173F35] to-[#0f2a23] border border-[#E8B95B]/40 text-[#E8B95B] shadow-inner">
             <FlameIcon className="w-6 h-6" />
           </div>
 
@@ -250,7 +252,7 @@ function KitchenKDS() {
               </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              Green Embassy • Culinary Ticket Dispatch & Expediting
+              Green Embassy &bull; Culinary Ticket Dispatch &amp; Expediting
             </p>
           </div>
         </div>
@@ -259,8 +261,8 @@ function KitchenKDS() {
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Urgent Tickets Alert Indicator */}
           {urgentOrdersCount > 0 && (
-            <div className="flex items-center gap-1.5 rounded-xl bg-rose-950/80 border border-rose-500/80 px-3 py-2 text-xs font-bold text-rose-200 animate-pulse">
-              <AlertCircleIcon className="w-4 h-4 text-rose-400" />
+            <div className="flex items-center gap-1.5 rounded-xl bg-rose-950/80 border border-rose-500/80 px-3.5 py-2 text-xs font-bold text-rose-200 animate-pulse shadow-md">
+              <AlertCircleIcon className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{urgentOrdersCount} Delayed (&gt;15m)</span>
             </div>
           )}
@@ -268,12 +270,13 @@ function KitchenKDS() {
           {/* Audio Chime Toggle */}
           <button
             onClick={toggleMute}
-            className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer shadow-md ${
+            className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer shadow-md select-none ${
               muted
                 ? "bg-stone-800 text-stone-400 border border-stone-700 hover:bg-stone-700 hover:text-stone-200"
                 : "bg-[#173F35] text-[#E8B95B] border border-[#E8B95B]/40 hover:bg-[#102e26]"
             }`}
             title={muted ? "Sound alerts disabled (click to enable)" : "Sound alerts enabled"}
+            aria-label={muted ? "Enable audio notification chime" : "Mute audio notification chime"}
           >
             {muted ? (
               <>
@@ -291,8 +294,9 @@ function KitchenKDS() {
           {/* Fullscreen Mode Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-stone-200 hover:bg-white/10 transition-all cursor-pointer shadow-md"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-stone-200 hover:bg-white/10 transition-all cursor-pointer shadow-md select-none"
             title="Toggle Fullscreen Kitchen Mode"
+            aria-label={isFullscreen ? "Exit fullscreen mode" : "Enter fullscreen mode"}
           >
             {isFullscreen ? (
               <>
@@ -312,6 +316,7 @@ function KitchenKDS() {
             onClick={() => loadOrders()}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer shadow-md"
             title="Refresh active tickets"
+            aria-label="Refresh kitchen orders"
           >
             <RefreshCwIcon className="w-4 h-4" />
           </button>
@@ -325,13 +330,13 @@ function KitchenKDS() {
             }`}
           >
             <span
-              className={`h-2.5 w-2.5 rounded-full ${
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${
                 offline ? "bg-rose-500" : "bg-emerald-400 animate-pulse"
               }`}
             />
             <span>
               {offline
-                ? "Offline · Reconnecting"
+                ? "Offline &bull; Reconnecting"
                 : `${orders.length} Active Ticket${orders.length !== 1 ? "s" : ""}`}
             </span>
           </div>
@@ -346,13 +351,13 @@ function KitchenKDS() {
         {/* ========================================================= */}
         {/* COLUMN 1: NEW ORDERS */}
         {/* ========================================================= */}
-        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-[#E8B95B] border border-white/10 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
+        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-[#E8B95B] border border-white/10 shadow-2xl lg:max-h-[calc(100vh-160px)] lg:overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#173F35_transparent]">
+          <div className="sticky top-0 z-10 bg-[#161E1C]/95 backdrop-blur-xs flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
             <div className="flex items-center gap-2.5">
               <h2 className="text-xl font-serif font-extrabold text-white tracking-wide">
                 New Orders
               </h2>
-              <span className="rounded-full bg-[#E8B95B] text-[#173F35] font-extrabold px-3 py-0.5 text-xs shadow-md">
+              <span className="rounded-full bg-[#E8B95B] text-[#173F35] font-black px-3 py-0.5 text-xs shadow-md tabular-nums">
                 {newOrders.length}
               </span>
             </div>
@@ -364,7 +369,7 @@ function KitchenKDS() {
           {newOrders.length === 0 && (
             <div className="py-20 text-center text-stone-500">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-stone-600">
-                <CheckIcon className="w-6 h-6" />
+                <ChefHatIcon className="w-6 h-6" />
               </div>
               <p className="font-serif text-sm font-semibold text-stone-400">All caught up</p>
               <p className="text-xs text-stone-600 mt-1">No new tickets waiting to be prepared.</p>
@@ -394,7 +399,7 @@ function KitchenKDS() {
                         Table {o.table_sessions?.tables?.label ?? "—"}
                       </span>
                       <span className="text-[11px] font-mono text-stone-400 uppercase tracking-wider">
-                        #{o.id.slice(0, 6)} • {new Date(o.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        #{o.id.slice(0, 6).toUpperCase()} &bull; {new Date(o.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
 
@@ -472,7 +477,7 @@ function KitchenKDS() {
                     {busyId === o.id ? (
                       <span className="flex items-center gap-2">
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#E8B95B] border-t-transparent" />
-                        Updating Station...
+                        <span>Updating Station...</span>
                       </span>
                     ) : isLocked ? (
                       <span>Locked ({formatClock(lockedSeconds)})</span>
@@ -492,13 +497,13 @@ function KitchenKDS() {
         {/* ========================================================= */}
         {/* COLUMN 2: PREPARING (ON STOVE / IN KITCHEN) */}
         {/* ========================================================= */}
-        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-emerald-500 border border-white/10 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
+        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-emerald-500 border border-white/10 shadow-2xl lg:max-h-[calc(100vh-160px)] lg:overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#173F35_transparent]">
+          <div className="sticky top-0 z-10 bg-[#161E1C]/95 backdrop-blur-xs flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
             <div className="flex items-center gap-2.5">
               <h2 className="text-xl font-serif font-extrabold text-white tracking-wide">
                 Preparing
               </h2>
-              <span className="rounded-full bg-emerald-500 text-[#101514] font-extrabold px-3 py-0.5 text-xs shadow-md">
+              <span className="rounded-full bg-emerald-500 text-[#101514] font-black px-3 py-0.5 text-xs shadow-md tabular-nums">
                 {preparingOrders.length}
               </span>
             </div>
@@ -541,7 +546,7 @@ function KitchenKDS() {
                         Table {o.table_sessions?.tables?.label ?? "—"}
                       </span>
                       <span className="text-[11px] font-mono text-stone-400 uppercase tracking-wider">
-                        #{o.id.slice(0, 6)} • Cooking in Progress
+                        #{o.id.slice(0, 6).toUpperCase()} &bull; Cooking in Progress
                       </span>
                     </div>
 
@@ -598,12 +603,12 @@ function KitchenKDS() {
                   <button
                     onClick={() => advanceStatus(o.id, "ready")}
                     disabled={busyId === o.id}
-                    className="w-full h-13 rounded-2xl bg-emerald-600 font-bold text-sm text-white tracking-wide hover:bg-emerald-500 active:scale-98 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full h-13 rounded-2xl bg-emerald-600 font-bold text-sm text-white tracking-wide hover:bg-emerald-500 active:scale-98 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer border border-emerald-400/40"
                   >
                     {busyId === o.id ? (
                       <span className="flex items-center gap-2">
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Plating Order...
+                        <span>Plating Order...</span>
                       </span>
                     ) : (
                       <>
@@ -621,25 +626,25 @@ function KitchenKDS() {
         {/* ========================================================= */}
         {/* COLUMN 3: READY FOR RUNNER / TABLE PICKUP */}
         {/* ========================================================= */}
-        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-green-400 border border-white/10 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
+        <section className="flex flex-col rounded-3xl bg-[#161E1C] p-4 sm:p-5 border-t-4 border-t-green-400 border border-white/10 shadow-2xl lg:max-h-[calc(100vh-160px)] lg:overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#173F35_transparent]">
+          <div className="sticky top-0 z-10 bg-[#161E1C]/95 backdrop-blur-xs flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
             <div className="flex items-center gap-2.5">
               <h2 className="text-xl font-serif font-extrabold text-white tracking-wide">
                 Ready for Pickup
               </h2>
-              <span className="rounded-full bg-green-400 text-[#101514] font-extrabold px-3 py-0.5 text-xs shadow-md">
+              <span className="rounded-full bg-green-400 text-[#101514] font-black px-3 py-0.5 text-xs shadow-md tabular-nums">
                 {readyOrders.length}
               </span>
             </div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-green-400">
-              Plated & Waiting
+              Plated &amp; Waiting
             </span>
           </div>
 
           {readyOrders.length === 0 && (
             <div className="py-20 text-center text-stone-500">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-stone-600">
-                <CheckIcon className="w-6 h-6" />
+                <UtensilsIcon className="w-6 h-6" />
               </div>
               <p className="font-serif text-sm font-semibold text-stone-400">Pass counter clear</p>
               <p className="text-xs text-stone-600 mt-1">Dishes ready for food runners will appear here.</p>
@@ -662,7 +667,7 @@ function KitchenKDS() {
                         Table {o.table_sessions?.tables?.label ?? "—"}
                       </span>
                       <span className="text-[11px] font-mono text-stone-400 uppercase tracking-wider">
-                        #{o.id.slice(0, 6)} • Ready for Table
+                        #{o.id.slice(0, 6).toUpperCase()} &bull; Ready for Table
                       </span>
                     </div>
 
@@ -688,8 +693,11 @@ function KitchenKDS() {
                         </div>
 
                         {item.note && (
-                          <div className="ml-9 mt-1 rounded-xl bg-green-950/40 border border-green-600/30 px-3 py-1.5 text-xs font-medium text-green-200">
-                            <b>Note:</b> {item.note}
+                          <div className="ml-9 mt-1 rounded-xl bg-green-950/40 border border-green-600/30 px-3 py-1.5 text-xs font-semibold text-green-200">
+                            <span className="text-green-400 font-extrabold uppercase text-[10px] tracking-wider block">
+                              Chef Note:
+                            </span>
+                            {item.note}
                           </div>
                         )}
                       </li>
@@ -700,12 +708,12 @@ function KitchenKDS() {
                   <button
                     onClick={() => advanceStatus(o.id, "served")}
                     disabled={busyId === o.id}
-                    className="w-full h-13 rounded-2xl bg-green-600 font-bold text-sm text-white tracking-wide hover:bg-green-500 active:scale-98 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full h-13 rounded-2xl bg-green-600 font-bold text-sm text-white tracking-wide hover:bg-green-500 active:scale-98 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer border border-green-400/40"
                   >
                     {busyId === o.id ? (
                       <span className="flex items-center gap-2">
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Serving Ticket...
+                        <span>Serving Ticket...</span>
                       </span>
                     ) : (
                       <>

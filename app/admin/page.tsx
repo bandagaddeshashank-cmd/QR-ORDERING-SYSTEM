@@ -39,6 +39,7 @@ import {
   TrendingUpIcon,
   ReceiptIcon,
   CloseIcon,
+  SearchIcon,
 } from "@/components/ui/icons";
 import { DietaryBadge } from "@/components/ui/Badge";
 
@@ -269,7 +270,7 @@ function AdminDashboard() {
     } else if (tab === "reports") {
       loadReports(reportRange);
     }
-    showToast("Dashboard refreshed with latest data.", "info");
+    showToast("Dashboard refreshed with latest authoritative data.", "info");
   };
 
   // -----------------------------------------------------------
@@ -575,19 +576,20 @@ function AdminDashboard() {
       >
         {/* Sticky Dashboard Header */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[#173F35]/10 bg-white/95 px-5 py-3.5 backdrop-blur-md shadow-xs print:hidden">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Mobile Hamburger Button */}
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl bg-[#FAF7F0] text-[#173F35] hover:bg-[#173F35]/10 transition-colors cursor-pointer"
+              className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl bg-[#FAF7F0] text-[#173F35] hover:bg-[#173F35]/10 transition-colors cursor-pointer shrink-0"
               title="Open Navigation"
+              aria-label="Open navigation sidebar"
             >
               <MenuBarsIcon className="w-5 h-5" />
             </button>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-serif font-bold text-base text-[#173F35]">
+                <span className="font-serif font-bold text-base sm:text-lg text-[#173F35] truncate">
                   {tab === "overview" && "Executive Dashboard"}
                   {tab === "tables" && "Table Occupancy & QR Center"}
                   {tab === "menu" && "Menu Catalog & Engineering"}
@@ -595,23 +597,24 @@ function AdminDashboard() {
                   {tab === "settings" && "Restaurant Configuration"}
                 </span>
 
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200 shrink-0">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
                   Live System
                 </span>
               </div>
-              <p className="text-[11px] text-[#242B2A]/60 hidden sm:block">
-                {restaurant?.name || "Green Embassy"} • Luxury Tech Dining Architecture
+              <p className="text-[11px] text-[#242B2A]/60 hidden sm:block truncate">
+                {restaurant?.name || "Green Embassy"} &bull; Luxury Tech Dining Architecture
               </p>
             </div>
           </div>
 
           {/* Quick Header Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleRefreshCurrent}
               title="Refresh Data"
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] text-[#173F35] hover:bg-white hover:border-[#173F35]/40 transition-all cursor-pointer"
+              aria-label="Refresh dashboard data"
             >
               <RefreshCwIcon className="w-4 h-4" />
             </button>
@@ -630,7 +633,7 @@ function AdminDashboard() {
                   setEditingItem(null);
                   setIsAddMenuModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer border border-[#E8B95B]/30"
               >
                 <PlusIcon className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Add Dish</span>
@@ -651,7 +654,7 @@ function AdminDashboard() {
                     setNewTableLabel("");
                     setIsAddTableModalOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 h-9 rounded-xl bg-[#173F35] px-3.5 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer border border-[#E8B95B]/30"
                 >
                   <PlusIcon className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Add Table</span>
@@ -674,7 +677,7 @@ function AdminDashboard() {
 
         {/* Toast Notification Banner */}
         {toast && (
-          <div className="px-6 pt-4 print:hidden">
+          <div className="px-6 pt-4 print:hidden animate-slide-up">
             <div
               className={`flex items-center justify-between rounded-2xl p-3.5 text-xs font-semibold shadow-luxury border ${
                 toast.type === "error"
@@ -692,7 +695,8 @@ function AdminDashboard() {
               </div>
               <button
                 onClick={() => setToast(null)}
-                className="text-stone-400 hover:text-stone-700 cursor-pointer"
+                className="text-stone-400 hover:text-stone-700 cursor-pointer p-1"
+                aria-label="Dismiss toast notification"
               >
                 <CloseIcon className="w-3.5 h-3.5" />
               </button>
@@ -708,7 +712,7 @@ function AdminDashboard() {
           {tab === "overview" && (
             <div className="space-y-8">
               {/* 4 PRIMARY KPI CARDS */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Revenue Today */}
                 <div className="rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury hover:shadow-luxury-lg transition-all group">
                   <div className="flex items-center justify-between">
@@ -785,7 +789,7 @@ function AdminDashboard() {
                     </span>
                   </p>
                   <p className="mt-2 text-[11px] text-[#242B2A]/60">
-                    {vacantTables.length} tables vacant & ready
+                    {vacantTables.length} tables vacant &amp; ready
                   </p>
                 </div>
               </div>
@@ -795,7 +799,7 @@ function AdminDashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="font-serif font-bold text-base text-[#173F35]">
-                      Floor Plan & Live Table Occupancy
+                      Floor Plan &amp; Live Table Occupancy
                     </h3>
                     <p className="text-[11px] text-[#242B2A]/60 mt-0.5">
                       Visual overview of real-time dining sessions across the floor
@@ -968,10 +972,10 @@ function AdminDashboard() {
                           <td className="px-4 py-3 text-right text-[#242B2A]/60 tabular-nums">
                             ₹{bill.tax}
                           </td>
-                          <td className="px-4 py-3 text-right font-bold text-sm text-[#173F35] tabular-nums">
+                          <td className="px-4 py-3 text-right font-serif font-bold text-sm text-[#173F35] tabular-nums">
                             ₹{bill.total.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-right text-[11px] text-[#242B2A]/50">
+                          <td className="px-4 py-3 text-right text-[11px] text-[#242B2A]/50 font-mono">
                             {new Date(bill.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -1036,7 +1040,7 @@ function AdminDashboard() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handlePreparePrintSheet}
-                    className="inline-flex items-center gap-1.5 h-10 rounded-xl border border-[#173F35] bg-white px-4 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl border border-[#173F35] bg-white px-4 text-xs font-bold text-[#173F35] shadow-xs hover:bg-[#173F35]/5 cursor-pointer transition-colors"
                   >
                     <PrinterIcon className="w-3.5 h-3.5" />
                     <span>Print All Table Tents</span>
@@ -1047,7 +1051,7 @@ function AdminDashboard() {
                       setNewTableLabel("");
                       setIsAddTableModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer"
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] cursor-pointer transition-colors border border-[#E8B95B]/30"
                   >
                     <PlusIcon className="w-3.5 h-3.5" />
                     <span>Add New Table</span>
@@ -1100,10 +1104,10 @@ function AdminDashboard() {
                     <div className="space-y-2 pt-4 border-t border-[#173F35]/10">
                       <button
                         onClick={() => handleOpenQr(t)}
-                        className="w-full h-10 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] hover:bg-[#102e26] shadow-luxury transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full h-10 rounded-xl bg-[#173F35] text-xs font-bold text-[#E8B95B] hover:bg-[#102e26] shadow-luxury transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-[#E8B95B]/30"
                       >
                         <QrCodeIcon className="w-4 h-4" />
-                        <span>View & Print QR</span>
+                        <span>View &amp; Print QR</span>
                       </button>
 
                       <div className="grid grid-cols-2 gap-2">
@@ -1146,13 +1150,26 @@ function AdminDashboard() {
             <div className="space-y-6">
               {/* Menu Filter Strip */}
               <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between rounded-3xl bg-white p-4 border border-[#173F35]/10 shadow-luxury">
-                <input
-                  type="text"
-                  placeholder="Search dishes by name or ingredients..."
-                  value={menuSearch}
-                  onChange={(e) => setMenuSearch(e.target.value)}
-                  className="h-10 w-full md:w-80 rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-xs font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
-                />
+                <div className="relative flex-1 max-w-md">
+                  <input
+                    type="text"
+                    placeholder="Search dishes by name or ingredients..."
+                    value={menuSearch}
+                    onChange={(e) => setMenuSearch(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] pl-9 pr-8 text-xs font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all shadow-xs"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#242B2A]/40">
+                    <SearchIcon className="w-3.5 h-3.5" />
+                  </span>
+                  {menuSearch && (
+                    <button
+                      onClick={() => setMenuSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#242B2A]/40 hover:text-[#242B2A] cursor-pointer"
+                    >
+                      <CloseIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <select
@@ -1207,7 +1224,7 @@ function AdminDashboard() {
                       setEditingItem(null);
                       setIsAddMenuModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer ml-auto"
+                    className="inline-flex items-center gap-1.5 h-10 rounded-xl bg-[#173F35] px-4 text-xs font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] transition-all cursor-pointer ml-auto border border-[#E8B95B]/30"
                   >
                     <PlusIcon className="w-3.5 h-3.5" />
                     <span>Add Dish</span>
@@ -1221,7 +1238,7 @@ function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-[#173F35]/10 bg-[#FAF7F0] text-[10px] font-bold uppercase tracking-wider text-[#242B2A]/60">
                       <tr>
-                        <th className="px-6 py-4">Item & Photography</th>
+                        <th className="px-6 py-4">Item &amp; Photography</th>
                         <th className="px-4 py-4">Category</th>
                         <th className="px-4 py-4">Price</th>
                         <th className="px-4 py-4 text-center">Status</th>
@@ -1264,7 +1281,7 @@ function AdminDashboard() {
                           </td>
 
                           {/* Price */}
-                          <td className="px-4 py-4 font-bold text-sm text-[#173F35] tabular-nums">
+                          <td className="px-4 py-4 font-serif font-bold text-sm text-[#173F35] tabular-nums">
                             ₹{Number(item.price).toFixed(2)}
                           </td>
 
@@ -1367,7 +1384,7 @@ function AdminDashboard() {
               </div>
 
               {/* 4 Financial Summary Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="rounded-3xl bg-white p-6 border border-[#173F35]/10 shadow-luxury">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#242B2A]/50">
                     Gross Invoiced Revenue
@@ -1452,7 +1469,7 @@ function AdminDashboard() {
                 <div className="flex items-center justify-between border-b border-[#173F35]/10 pb-4 mb-6">
                   <div>
                     <h2 className="text-xl font-serif font-bold text-[#173F35]">
-                      Restaurant Configuration & Tax Profile
+                      Restaurant Configuration &amp; Tax Profile
                     </h2>
                     <p className="text-xs text-[#242B2A]/60 mt-0.5">
                       Configure official restaurant identity, GSTIN, billing tax rules, and guest cancellation window.
@@ -1492,7 +1509,7 @@ function AdminDashboard() {
                           setSettingsForm({ ...settingsForm, gstin: e.target.value })
                         }
                         placeholder="e.g. 29AAAAA0000A1Z5"
-                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold uppercase focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold uppercase focus:border-[#173F35] focus:bg-white focus:outline-none transition-all font-mono"
                       />
                     </div>
 
@@ -1513,7 +1530,7 @@ function AdminDashboard() {
                             tax_percent: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all tabular-nums"
                       />
                       <p className="text-[11px] text-[#242B2A]/60 mt-1">
                         Authoritative rate applied to customer billing invoices.
@@ -1537,7 +1554,7 @@ function AdminDashboard() {
                             service_charge_percent: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all tabular-nums"
                       />
                       <p className="text-[11px] text-[#242B2A]/60 mt-1">
                         Optional hospitality service charge (0% if not levied).
@@ -1546,7 +1563,7 @@ function AdminDashboard() {
 
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-semibold uppercase tracking-wider text-[#242B2A]/70 mb-1.5">
-                        Customer Order Modification & Cancellation Window (Seconds) *
+                        Customer Order Modification &amp; Cancellation Window (Seconds) *
                       </label>
                       <input
                         type="number"
@@ -1560,7 +1577,7 @@ function AdminDashboard() {
                             cancel_window_seconds: parseInt(e.target.value, 10) || 0,
                           })
                         }
-                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all"
+                        className="h-12 w-full rounded-xl border border-[#173F35]/15 bg-[#FAF7F0] px-3.5 text-sm font-semibold focus:border-[#173F35] focus:bg-white focus:outline-none transition-all tabular-nums"
                       />
                       <p className="text-[11px] text-[#242B2A]/60 mt-1">
                         During this grace countdown, guests can edit items or cancel orders without kitchen friction. Recommended: 120 seconds.
@@ -1572,7 +1589,7 @@ function AdminDashboard() {
                     <button
                       type="submit"
                       disabled={isPendingSettings}
-                      className="inline-flex h-12 items-center justify-center rounded-xl bg-[#173F35] px-8 text-sm font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer"
+                      className="inline-flex h-12 items-center justify-center rounded-xl bg-[#173F35] px-8 text-sm font-bold text-[#E8B95B] shadow-luxury hover:bg-[#102e26] disabled:opacity-50 transition-all cursor-pointer border border-[#E8B95B]/30"
                     >
                       {isPendingSettings ? "Saving Settings..." : "Save Configuration"}
                     </button>

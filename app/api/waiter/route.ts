@@ -1,8 +1,11 @@
+import { connection } from "next/server";
 import { supabaseAdmin, requireStaff, apiError, apiSuccess } from "@/lib/serverAuth";
 import { resolveTableFromToken } from "@/lib/dbHelpers";
 
 export async function GET(req: Request) {
+  await connection();
   try {
+    await connection();
     const token = new URL(req.url).searchParams.get("t");
 
     // Customer query: check if current table has an active waiter call
