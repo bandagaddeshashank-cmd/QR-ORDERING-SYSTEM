@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useId } from "react";
+import { useEffect, useState, useCallback, useId, useRef } from "react";
 import Link from "next/link";
 import ManagerGate from "./ManagerGate";
 import ReceiptPreview from "./ReceiptPreview";
 import { TableCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, AuthFetchError } from "@/lib/authFetch";
+import { signOutStaff } from "@/lib/authHelper";
 import type { PaymentMethod, Bill } from "@/lib/types";
 import {
   CashIcon,
@@ -24,6 +25,7 @@ import {
   GridIcon,
   SparklesIcon,
   CloseIcon,
+  LogOutIcon,
 } from "@/components/ui/icons";
 
 type TableCard = {
@@ -92,6 +94,9 @@ function BillingDashboard() {
   const [tab, setTab] = useState<"overview" | "settle" | "history">("overview");
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Active Bill & Settlement State
   const [searchTable, setSearchTable] = useState("");
@@ -110,45 +115,86 @@ function BillingDashboard() {
   const [historySearch, setHistorySearch] = useState("");
 
   const loadOverview = useCallback(async () => {
+    // Avoid duplicate / stacked requests
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const res = await authFetch("/api/billing?mode=overview", {
         cache: "no-store",
+        signal: controller.signal,
       });
+
       if (res.ok) {
         const data: OverviewData = await res.json();
         setOverview(data);
-        setLoadingOverview(false);
+        setOverviewError(null);
+      } else {
+        let message = "Unable to retrieve billing overview.";
+        if (res.status === 401) {
+          message = "Manager session expired. Please sign out and sign in again to access billing.";
+        } else if (res.status === 403) {
+          message = "Access restricted. Manager privileges required for billing operations.";
+        } else if (res.status === 404) {
+          message = "Restaurant or billing records not found.";
+        } else if (res.status >= 500) {
+          message = "Server error processing billing data. Please retry.";
+        } else {
+          try {
+            const errData = await res.json();
+            if (errData?.error) message = errData.error;
+          } catch {
+            // keep fallback
+          }
+        }
+        setOverviewError(message);
       }
-    } catch (err) {
-      console.error("Failed to fetch billing overview:", err);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      const message = isOffline
+        ? "You appear to be offline. Please verify your internet connection."
+        : err instanceof AuthFetchError || err instanceof Error
+        ? err.message
+        : "Failed to connect to billing server. Please verify network connectivity.";
+
+      setOverviewError(message);
+      console.warn("[BillingDashboard] Overview request notice:", message);
+    } finally {
+      inFlightRef.current = false;
+      setLoadingOverview(false);
     }
   }, []);
 
-  // Polling for live table status updates
+  // Polling for live table status updates with in-flight deduplication
   useEffect(() => {
-    let isSubscribed = true;
-    const fetchOverview = async () => {
-      try {
-        const res = await authFetch("/api/billing?mode=overview", {
-          cache: "no-store",
-        });
-        if (res.ok && isSubscribed) {
-          const data: OverviewData = await res.json();
-          setOverview(data);
-          setLoadingOverview(false);
-        }
-      } catch (err) {
-        console.error("Failed to fetch billing overview:", err);
+    let isMounted = true;
+
+    const poll = async () => {
+      if (isMounted) {
+        await loadOverview();
       }
     };
 
-    fetchOverview();
-    const timer = setInterval(fetchOverview, 6000);
+    poll();
+    const timer = setInterval(poll, 6000);
+
     return () => {
-      isSubscribed = false;
+      isMounted = false;
       clearInterval(timer);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
-  }, []);
+  }, [loadOverview]);
 
   // Authoritative Bill Fetch
   const loadBill = async (opts: { table?: string; sessionId?: string; disc?: string }) => {
@@ -186,8 +232,13 @@ function BillingDashboard() {
       setSearchTable(data.table);
       setTenderCash(String(Math.ceil(data.total)));
       setTab("settle");
-    } catch {
-      setError("Network error loading table bill.");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Network error loading table bill. Please check connection.";
+      setError(msg);
+      console.warn("[loadBill] Notice:", msg);
     } finally {
       setBusy(false);
     }
@@ -221,8 +272,13 @@ function BillingDashboard() {
       setCurrentBill(null);
       setSuccessMsg(`Invoice #${data.billNumber} finalized. Table session closed.`);
       loadOverview();
-    } catch {
-      setError("Failed to record settlement. Please verify database connectivity.");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to record settlement. Please verify network and database connectivity.";
+      setError(msg);
+      console.warn("[handleSettleBill] Notice:", msg);
     } finally {
       setBusy(false);
     }
@@ -365,6 +421,20 @@ function BillingDashboard() {
               >
                 <span>Admin</span>
               </Link>
+
+              {/* Direct Sign Out Action */}
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOutStaff();
+                  window.location.reload();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300/60 bg-rose-50/60 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 transition-colors cursor-pointer shadow-xs"
+                title="Sign Out of Cashier Station"
+              >
+                <LogOutIcon className="w-3.5 h-3.5 text-rose-700" />
+                <span>Sign Out</span>
+              </button>
             </div>
           </div>
         </header>
@@ -405,6 +475,63 @@ function BillingDashboard() {
         {/* ========================================================= */}
         {tab === "overview" && (
           <div className="space-y-6 print:hidden">
+            {/* Live Sync Warning Banner when overview is available but background sync had an issue */}
+            {overviewError && overview && (
+              <div
+                role="status"
+                className="flex items-center justify-between rounded-2xl bg-amber-50 p-3.5 text-xs font-semibold text-amber-900 border border-amber-200 shadow-luxury"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertCircleIcon className="w-4 h-4 shrink-0 text-amber-700" />
+                  <span>
+                    Sync notice: {overviewError} Showing last recorded restaurant floor status.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadOverview()}
+                  className="rounded-lg bg-amber-200/60 px-2.5 py-1 text-[11px] font-bold text-amber-950 hover:bg-amber-200 transition-colors cursor-pointer shrink-0"
+                >
+                  Retry Sync
+                </button>
+              </div>
+            )}
+
+            {/* Error / Offline State when initial overview failed completely */}
+            {overviewError && !overview && !loadingOverview && (
+              <div className="rounded-3xl bg-white p-8 border border-rose-200 shadow-luxury text-center my-6">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-800">
+                  <AlertCircleIcon className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-serif font-bold text-[#173F35] mb-1">
+                  Unable to Connect to Billing Service
+                </h3>
+                <p className="text-xs text-[#242B2A]/70 max-w-md mx-auto mb-5 leading-relaxed">
+                  {overviewError}
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => loadOverview()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#173F35] px-4 py-2.5 text-xs font-bold text-[#E8B95B] hover:bg-[#102e26] transition-all cursor-pointer shadow-luxury"
+                  >
+                    <RefreshCwIcon className="w-3.5 h-3.5" />
+                    <span>Retry Connection</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await signOutStaff();
+                      window.location.reload();
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/20 bg-[#FAF7F0] px-4 py-2.5 text-xs font-semibold text-[#173F35] hover:bg-white transition-colors cursor-pointer"
+                  >
+                    <LogOutIcon className="w-3.5 h-3.5" />
+                    <span>Sign Out &amp; Re-authenticate</span>
+                  </button>
+                </div>
+              </div>
+            )}
             {/* 4 REVENUE & FINANCIAL KPI CARDS */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Today's Gross Revenue */}
@@ -548,7 +675,7 @@ function BillingDashboard() {
                 </div>
               </div>
 
-              {loadingOverview && (
+              {loadingOverview && !overview && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 mb-4">
                   <TableCardSkeleton />
                   <TableCardSkeleton />
@@ -616,7 +743,7 @@ function BillingDashboard() {
                   );
                 })}
 
-                {!loadingOverview && filteredTables.length === 0 && (
+                {!loadingOverview && !overviewError && filteredTables.length === 0 && (
                   <div className="col-span-full py-6">
                     <EmptyState
                       icon={GridIcon}
@@ -992,14 +1119,28 @@ function BillingDashboard() {
               <div className="py-6">
                 <EmptyState
                   icon={ReceiptIcon}
-                  title="No Invoices Found"
+                  title={overviewError && !overview ? "Unable to Load Billing History" : "No Invoices Found"}
                   description={
-                    historySearch
+                    overviewError && !overview
+                      ? overviewError
+                      : historySearch
                       ? `No settled bills matched your search for "${historySearch}".`
                       : "No completed billing records have been settled yet today."
                   }
-                  actionLabel={historySearch ? "Clear Filter" : undefined}
-                  onAction={historySearch ? () => setHistorySearch("") : undefined}
+                  actionLabel={
+                    overviewError && !overview
+                      ? "Retry Connection"
+                      : historySearch
+                      ? "Clear Filter"
+                      : undefined
+                  }
+                  onAction={
+                    overviewError && !overview
+                      ? () => loadOverview()
+                      : historySearch
+                      ? () => setHistorySearch("")
+                      : undefined
+                  }
                 />
               </div>
             ) : (
