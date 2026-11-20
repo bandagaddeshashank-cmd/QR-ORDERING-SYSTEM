@@ -348,9 +348,9 @@ function BillingDashboard() {
                 GE
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-serif font-bold text-[#173F35]">
-                    POS Billing & Settlement Desk
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-2xl font-serif font-bold text-[#173F35] tracking-tight">
+                    Billing &amp; Settlement Desk
                   </h1>
                   <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
                     Station Active
