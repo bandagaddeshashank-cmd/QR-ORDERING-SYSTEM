@@ -368,24 +368,6 @@ function TableContent() {
     activeCategoryRef.current = activeCategory;
   }, [activeCategory]);
 
-  // Center the active category chip in the horizontal scrolling navigation bar
-  const scrollChipIntoView = useCallback(
-    (cat: string) => {
-      const nav = chipsRef.current;
-      if (!nav) return;
-      const activeIdx = categories.findIndex(([c]) => c === cat);
-      if (activeIdx === -1) return;
-      const chip = nav.children[activeIdx] as HTMLElement | undefined;
-      if (!chip) return;
-      const chipLeft = chip.offsetLeft;
-      const chipWidth = chip.offsetWidth;
-      const navWidth = nav.offsetWidth;
-      const targetScrollLeft = chipLeft - navWidth / 2 + chipWidth / 2;
-      nav.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: "smooth" });
-    },
-    [categories]
-  );
-
   // Category navigation scroll arrow states
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -399,7 +381,7 @@ function TableContent() {
     const clientWidth = nav.clientWidth;
     const scrollWidth = nav.scrollWidth;
 
-    const overflow = scrollWidth > clientWidth + 4;
+    const overflow = scrollWidth > clientWidth + 2;
     setHasOverflow(overflow);
 
     if (!overflow) {
@@ -408,23 +390,92 @@ function TableContent() {
       return;
     }
 
-    setCanScrollLeft(scrollLeft > 4);
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+    setCanScrollLeft(scrollLeft > 1);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
   }, []);
+
+  // Center the active category chip in the horizontal scrolling navigation bar
+  const scrollChipIntoView = useCallback(
+    (cat: string) => {
+      const nav = chipsRef.current;
+      if (!nav) return;
+      const activeIdx = categories.findIndex(([c]) => c === cat);
+      if (activeIdx === -1) return;
+      const chip = nav.children[activeIdx] as HTMLElement | undefined;
+      if (!chip) return;
+      const chipLeft = chip.offsetLeft;
+      const chipWidth = chip.offsetWidth;
+      const navWidth = nav.offsetWidth;
+      const targetScrollLeft = Math.max(0, chipLeft - navWidth / 2 + chipWidth / 2);
+      nav.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
+      setTimeout(updateScrollArrows, 80);
+      setTimeout(updateScrollArrows, 250);
+    },
+    [categories, updateScrollArrows]
+  );
 
   const handleScrollLeft = useCallback(() => {
     const nav = chipsRef.current;
     if (!nav) return;
-    const scrollDistance = Math.round(nav.clientWidth * 0.75);
-    nav.scrollBy({ left: -scrollDistance, behavior: "smooth" });
-  }, []);
+
+    const currentScroll = nav.scrollLeft;
+    const clientWidth = nav.clientWidth;
+    const scrollAmount = Math.max(120, Math.round(clientWidth * 0.75));
+    const targetScroll = Math.max(0, currentScroll - scrollAmount);
+
+    // Find closest preceding chip start to keep chips neatly aligned
+    const chips = Array.from(nav.children) as HTMLElement[];
+    let snappedTarget = targetScroll;
+    for (let i = chips.length - 1; i >= 0; i--) {
+      const chip = chips[i];
+      if (chip.offsetLeft <= targetScroll + 30 && chip.offsetLeft >= targetScroll - 40) {
+        snappedTarget = Math.max(0, chip.offsetLeft - 8);
+        break;
+      }
+    }
+
+    nav.scrollTo({
+      left: snappedTarget,
+      behavior: "smooth",
+    });
+
+    requestAnimationFrame(updateScrollArrows);
+    setTimeout(updateScrollArrows, 60);
+    setTimeout(updateScrollArrows, 180);
+    setTimeout(updateScrollArrows, 350);
+  }, [updateScrollArrows]);
 
   const handleScrollRight = useCallback(() => {
     const nav = chipsRef.current;
     if (!nav) return;
-    const scrollDistance = Math.round(nav.clientWidth * 0.75);
-    nav.scrollBy({ left: scrollDistance, behavior: "smooth" });
-  }, []);
+
+    const currentScroll = nav.scrollLeft;
+    const clientWidth = nav.clientWidth;
+    const maxScroll = Math.max(0, nav.scrollWidth - clientWidth);
+    const scrollAmount = Math.max(120, Math.round(clientWidth * 0.75));
+    const targetScroll = Math.min(maxScroll, currentScroll + scrollAmount);
+
+    // Find closest upcoming chip start to keep chips neatly aligned
+    const chips = Array.from(nav.children) as HTMLElement[];
+    let snappedTarget = targetScroll;
+    for (let i = 0; i < chips.length; i++) {
+      const chip = chips[i];
+      if (chip.offsetLeft >= targetScroll - 30 && chip.offsetLeft <= targetScroll + 40) {
+        snappedTarget = Math.min(maxScroll, chip.offsetLeft - 8);
+        break;
+      }
+    }
+
+    nav.scrollTo({
+      left: snappedTarget,
+      behavior: "smooth",
+    });
+
+    requestAnimationFrame(updateScrollArrows);
+    setTimeout(updateScrollArrows, 60);
+    setTimeout(updateScrollArrows, 180);
+    setTimeout(updateScrollArrows, 350);
+  }, [updateScrollArrows]);
 
   // Monitor category navigation scroll position to update arrow disabled states
   useEffect(() => {
@@ -436,21 +487,33 @@ function TableContent() {
     nav.addEventListener("scroll", updateScrollArrows, { passive: true });
     window.addEventListener("resize", updateScrollArrows);
 
-    const timer = setTimeout(updateScrollArrows, 150);
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => {
+        updateScrollArrows();
+      });
+      ro.observe(nav);
+    }
+
+    const timer = setTimeout(updateScrollArrows, 100);
 
     return () => {
       nav.removeEventListener("scroll", updateScrollArrows);
       window.removeEventListener("resize", updateScrollArrows);
+      if (ro) ro.disconnect();
       clearTimeout(timer);
     };
-  }, [mounted, categories, updateScrollArrows]);
+  }, [mounted, categories, q, updateScrollArrows]);
 
   // Auto-scroll the horizontal category nav when active category changes
   useEffect(() => {
-    if (currentCategory) {
-      scrollChipIntoView(currentCategory);
+    if (currentCategory && mounted) {
+      const timer = setTimeout(() => {
+        scrollChipIntoView(currentCategory);
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [currentCategory, scrollChipIntoView]);
+  }, [currentCategory, categories, mounted, scrollChipIntoView]);
 
   // Handle manual category chip click
   const handleCategoryClick = useCallback(
@@ -774,9 +837,6 @@ function TableContent() {
               />
             </div>
             <div className="min-w-0">
-              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[#E8B95B] block truncate">
-                Haute Cuisine &bull; Bespoke Dining
-              </span>
               <h1 className="text-lg sm:text-xl font-serif font-bold text-white leading-tight truncate tracking-wide">
                 {data?.restaurant?.name || "Green Embassy"}
               </h1>

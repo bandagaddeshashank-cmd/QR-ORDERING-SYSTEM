@@ -127,10 +127,6 @@ export default function AdminSidebar({
                 <span className="block font-serif font-bold text-sm tracking-wide text-[#E8B95B] truncate">
                   {restaurantName || "GREEN EMBASSY"}
                 </span>
-                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Enterprise Console
-                </span>
               </div>
             )}
           </div>

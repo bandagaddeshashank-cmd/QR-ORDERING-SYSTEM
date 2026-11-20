@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
 import KitchenGate from "./KitchenGate";
 import WaiterCalls from "./waitercalls";
 import { authFetch } from "@/lib/authFetch";
@@ -21,8 +20,6 @@ import {
   FlameIcon,
   ChefHatIcon,
   UtensilsIcon,
-  GridIcon,
-  ReceiptIcon,
 } from "@/components/ui/icons";
 
 type Line = {
@@ -225,7 +222,7 @@ function KitchenKDS() {
               </span>
             </div>
             <p className="text-[11px] text-stone-400">
-              GREEN EMBASSY &bull; Culinary Expediting &amp; Ticket Operations
+              GREEN EMBASSY
             </p>
           </div>
         </div>
@@ -319,25 +316,6 @@ function KitchenKDS() {
           >
             <RefreshCwIcon className={`w-4 h-4 ${isRefreshing ? "animate-spin text-[#E8B95B]" : ""}`} />
           </button>
-
-          {/* Operational Portal Quick Nav */}
-          <Link
-            href="/admin"
-            className="hidden sm:flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white transition-all shadow-md"
-            title="Executive Admin Console"
-            aria-label="Open Admin Dashboard"
-          >
-            <GridIcon className="w-4 h-4" />
-          </Link>
-
-          <Link
-            href="/billing"
-            className="hidden sm:flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-stone-300 hover:bg-white/10 hover:text-white transition-all shadow-md"
-            title="Cashier & Billing Desk"
-            aria-label="Open Billing Desk"
-          >
-            <ReceiptIcon className="w-4 h-4 text-emerald-400" />
-          </Link>
 
           {/* Network Health Indicator */}
           <div
