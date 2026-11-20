@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import type { Bill, BillLine } from "@/lib/types";
 import { PrinterIcon } from "@/components/ui/icons";
 
@@ -53,8 +54,14 @@ export default function ReceiptPreview({
       <div className="mx-auto max-w-[340px] font-mono text-xs text-[#242B2A] leading-tight space-y-3 p-4 border border-dashed border-[#173F35]/20 rounded-2xl bg-[#FAF7F0]/40 print:border-0 print:p-0 print:bg-white print:max-w-none">
         {/* Receipt Header */}
         <div className="text-center space-y-1">
-          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-xl bg-[#173F35] text-[#E8B95B] font-serif font-extrabold text-sm">
-            GE
+          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-xl bg-[#173F35] p-1 border border-[#E8B95B]/40 shadow-xs">
+            <Image
+              src="/logo.png"
+              alt="Green Embassy Logo"
+              width={32}
+              height={32}
+              className="h-full w-auto object-contain"
+            />
           </div>
           <h2 className="text-base font-serif font-extrabold uppercase tracking-wider text-[#173F35]">
             {bill.restaurant || "Green Embassy"}

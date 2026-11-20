@@ -161,7 +161,7 @@ async function runAllWorkflowTests() {
   // Scenario 8: Manager generates a bill
   console.log('\n[Scenario 8: Bill Generation & Financial Aggregation]');
   const dishes = [
-    { name: 'Paneer Butter Masala', price: 220, qty: 2, status: 'active' },
+    { name: 'Paneer Butter Masala', price: 220, qty: 2, status: 'pending' },
     { name: 'Cold Drink', price: 40, qty: 1, status: 'cancelled' }, // Should be excluded
   ];
   const activeLines = dishes.filter(d => d.status !== 'cancelled');

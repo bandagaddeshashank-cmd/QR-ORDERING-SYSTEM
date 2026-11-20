@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useId, useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import ManagerGate from "./ManagerGate";
 import ReceiptPreview from "./ReceiptPreview";
@@ -344,8 +345,15 @@ function BillingDashboard() {
         <header className="mb-6 rounded-3xl bg-white p-5 border border-[#173F35]/10 shadow-luxury print:hidden">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#173F35] text-[#E8B95B] font-serif font-extrabold text-lg shadow-inner">
-                GE
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#173F35] p-1.5 border border-[#E8B95B]/40 shadow-luxury">
+                <Image
+                  src="/logo.png"
+                  alt="Green Embassy Logo"
+                  width={48}
+                  height={48}
+                  className="h-full w-auto object-contain drop-shadow"
+                  priority
+                />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2.5">

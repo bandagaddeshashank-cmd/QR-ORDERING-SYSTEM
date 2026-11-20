@@ -31,7 +31,8 @@ export async function POST(req: Request) {
       rpcErr &&
       rpcErr.code !== "PGRST202" &&
       !rpcErr.message?.includes("function") &&
-      !rpcErr.message?.includes("not found")
+      !rpcErr.message?.includes("not found") &&
+      !rpcErr.message?.includes("invalid input value for enum item_status")
     ) {
       return apiError(rpcErr.message || "Failed to update order.", 400);
     }
@@ -190,7 +191,7 @@ export async function POST(req: Request) {
       .from("order_items")
       .select("id")
       .eq("order_id", orderId)
-      .eq("status", "active");
+      .neq("status", "cancelled");
 
     if (!activeItems || activeItems.length === 0) {
       await supabaseAdmin

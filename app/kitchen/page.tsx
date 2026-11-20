@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import KitchenGate from "./KitchenGate";
 import WaiterCalls from "./waitercalls";
 import { authFetch } from "@/lib/authFetch";
@@ -207,8 +208,15 @@ function KitchenKDS() {
       <header className="mb-4 sm:mb-6 flex flex-wrap items-center justify-between gap-3.5 rounded-3xl bg-[#141A18] px-5 py-3.5 border border-white/10 shadow-2xl">
         {/* Brand & Crest */}
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#173F35] to-[#0d241e] border border-[#E8B95B]/40 text-[#E8B95B] shadow-luxury">
-            <FlameIcon className="w-6 h-6" />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#173F35] to-[#0d241e] border border-[#E8B95B]/40 shadow-luxury p-1">
+            <Image
+              src="/logo.png"
+              alt="Green Embassy Logo"
+              width={44}
+              height={44}
+              className="h-full w-auto object-contain drop-shadow"
+              priority
+            />
           </div>
 
           <div>

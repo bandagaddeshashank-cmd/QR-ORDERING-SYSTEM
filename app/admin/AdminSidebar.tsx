@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   GridIcon,
@@ -117,9 +118,16 @@ export default function AdminSidebar({
         {/* Brand Header */}
         <div className="flex items-center justify-between px-4 py-4.5 border-b border-white/10 relative">
           <div className="flex items-center gap-3 overflow-hidden">
-            {/* Monogram Crest */}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E8B95B] via-[#dfad4c] to-[#c99b44] text-[#173F35] font-serif font-black text-base shadow-luxury border border-white/20">
-              GE
+            {/* Brand Logo */}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#173F35] p-1 border border-[#E8B95B]/40 shadow-luxury">
+              <Image
+                src="/logo.png"
+                alt="Green Embassy Logo"
+                width={40}
+                height={40}
+                className="h-full w-auto object-contain drop-shadow"
+                priority
+              />
             </div>
 
             {!isCollapsed && (

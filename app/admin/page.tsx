@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, useCallback } from "react";
+import Image from "next/image";
 import AdminGate from "./AdminGate";
 import AdminSidebar from "./AdminSidebar";
 import MenuThumbnail from "./MenuThumbnail";
@@ -586,6 +587,18 @@ function AdminDashboard() {
             >
               <MenuBarsIcon className="w-5 h-5" />
             </button>
+
+            {/* Mobile Brand Logo */}
+            <div className="flex md:hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#173F35] p-1 border border-[#E8B95B]/40 shadow-xs">
+              <Image
+                src="/logo.png"
+                alt="Green Embassy Logo"
+                width={36}
+                height={36}
+                className="h-full w-auto object-contain drop-shadow"
+                priority
+              />
+            </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
