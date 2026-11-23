@@ -3,13 +3,21 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
 import type { Session } from "@supabase/supabase-js";
-import { supabaseManager as supabase } from "@/lib/supabaseManager";
+import { supabaseKitchen as supabase } from "@/lib/supabaseManager";
 import {
   formatAuthError,
   hasRequiredRole,
   getSessionRole,
   signOutStaff,
 } from "@/lib/authHelper";
+import {
+  checkStaffSessionValidity,
+  initializeStaffSession,
+  getStoredExpiryNotice,
+  subscribeToSessionLifecycle,
+  recordUserActivity,
+  terminateStaffSession,
+} from "@/lib/sessionManager";
 import { LockIcon, LogOutIcon, AlertCircleIcon, CheckCircleIcon } from "@/components/ui/icons";
 
 export default function KitchenGate({ children }: { children: ReactNode }) {
@@ -18,6 +26,9 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [expiryNotice, setExpiryNotice] = useState<string>(() =>
+    typeof window !== "undefined" ? getStoredExpiryNotice("kitchen") || "" : ""
+  );
   const [busy, setBusy] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -27,24 +38,88 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     // Load active session from persistent storage
-    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
+    supabase.auth.getSession().then(async ({ data, error: sessionErr }) => {
       if (!isMounted) return;
       if (sessionErr) {
         console.warn("[KitchenGate] Session initialization notice:", sessionErr.message);
       }
-      setSession(data.session);
+
+      if (data.session) {
+        // Enforce role: staff or platform_admin ONLY
+        const role = getSessionRole(data.session);
+        if (role !== "staff" && role !== "platform_admin") {
+          await terminateStaffSession("kitchen", "no_session");
+          setSession(null);
+          setReady(true);
+          return;
+        }
+
+        const validity = checkStaffSessionValidity(data.session.user.id, Date.now(), "kitchen");
+        if (!validity.valid) {
+          if (validity.message) {
+            setExpiryNotice(validity.message);
+          }
+          await terminateStaffSession("kitchen", validity.reason || "no_session", validity.message);
+          setSession(null);
+        } else {
+          recordUserActivity("kitchen");
+          setSession(data.session);
+        }
+      } else {
+        setSession(null);
+      }
       setReady(true);
     });
 
     // Subscribe to auth state changes across tabs and windows
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, s) => {
       if (!isMounted) return;
-      setSession(s);
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+      } else if (event === "SIGNED_IN" && s) {
+        const role = getSessionRole(s);
+        if (role !== "staff" && role !== "platform_admin") {
+          setSession(null);
+          return;
+        }
+        const validity = checkStaffSessionValidity(s.user.id, Date.now(), "kitchen");
+        if (validity.valid) {
+          setSession(s);
+        } else {
+          setSession(null);
+        }
+      } else {
+        const role = getSessionRole(s);
+        if (role && role !== "staff" && role !== "platform_admin") {
+          setSession(null);
+        } else {
+          setSession(s);
+        }
+      }
     });
+
+    // Subscribe to session lifecycle (activity monitoring, inactivity timeout, midnight IST, multi-tab sync)
+    const unsubscribeLifecycle = subscribeToSessionLifecycle(
+      {
+        onExpired: (reason, message) => {
+          if (!isMounted) return;
+          setSession(null);
+          if (message) {
+            setExpiryNotice(message);
+          } else if (reason === "inactivity") {
+            setExpiryNotice("Your session has expired due to inactivity. Please log in again.");
+          } else if (reason === "daily_expired") {
+            setExpiryNotice("Your daily session has expired. Please log in again for today.");
+          }
+        },
+      },
+      "kitchen"
+    );
 
     return () => {
       isMounted = false;
       authListener.subscription.unsubscribe();
+      unsubscribeLifecycle();
     };
   }, []);
 
@@ -54,6 +129,7 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
     submittingRef.current = true;
     setBusy(true);
     setError("");
+    setExpiryNotice("");
 
     try {
       const cleanEmail = email.trim();
@@ -73,8 +149,16 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
       }
 
       if (data?.session) {
+        const role = getSessionRole(data.session);
+        if (role !== "staff" && role !== "platform_admin") {
+          await signOutStaff("kitchen");
+          setError("Access restricted: This station requires Kitchen staff credentials.");
+          return;
+        }
+        initializeStaffSession(data.session.user.id, "kitchen");
         setSession(data.session);
         setPassword("");
+        setExpiryNotice("");
       }
     } catch (err) {
       setError(formatAuthError(err));
@@ -119,8 +203,9 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     setBusy(true);
-    await signOutStaff();
+    await signOutStaff("kitchen");
     setSession(null);
+    setExpiryNotice("");
     setBusy(false);
   };
 
@@ -161,6 +246,16 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
               ? "Enter your staff email to receive a password recovery link."
               : "Authorized culinary & service staff access only"}
           </p>
+
+          {expiryNotice && !forgotMode && (
+            <div
+              role="alert"
+              className="rounded-xl bg-amber-950/80 p-3 text-xs font-semibold text-amber-200 border border-amber-500/50 flex items-start gap-2.5 mb-4 text-left"
+            >
+              <AlertCircleIcon className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span className="leading-snug">{expiryNotice}</span>
+            </div>
+          )}
 
           {forgotMode ? (
             <form onSubmit={handleResetPassword} className="space-y-4 text-left">
@@ -314,7 +409,7 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   }
 
   const role = getSessionRole(session);
-  const isAuthorized = hasRequiredRole(session, ["staff", "manager", "platform_admin"]);
+  const isAuthorized = hasRequiredRole(session, ["staff", "platform_admin"]);
 
   if (!isAuthorized) {
     return (
@@ -327,7 +422,7 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
             Access Restricted
           </h2>
           <p className="text-sm text-stone-300 mb-6 leading-relaxed">
-            This account (<span className="text-white font-medium">{session.user.email}</span>) is not assigned as kitchen staff or manager in Supabase metadata.
+            This account (<span className="text-white font-medium">{session.user.email}</span>) is not assigned the Kitchen Staff role in Supabase metadata.
           </p>
           <button
             onClick={handleSignOut}
@@ -345,8 +440,6 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   const displayRoleLabel =
     role === "platform_admin"
       ? "Platform Admin"
-      : role === "manager"
-      ? "Manager on Duty"
       : "Kitchen Staff";
 
   return (

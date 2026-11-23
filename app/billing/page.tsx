@@ -434,7 +434,7 @@ function BillingDashboard() {
               <button
                 type="button"
                 onClick={async () => {
-                  await signOutStaff();
+                  await signOutStaff("manager");
                   window.location.reload();
                 }}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300/60 bg-rose-50/60 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 transition-colors cursor-pointer shadow-xs"
@@ -529,7 +529,7 @@ function BillingDashboard() {
                   <button
                     type="button"
                     onClick={async () => {
-                      await signOutStaff();
+                      await signOutStaff("manager");
                       window.location.reload();
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-[#173F35]/20 bg-[#FAF7F0] px-4 py-2.5 text-xs font-semibold text-[#173F35] hover:bg-white transition-colors cursor-pointer"

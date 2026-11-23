@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
-import { supabaseManager } from "./supabaseManager";
+import { supabaseManager, supabaseKitchen } from "./supabaseManager";
+import { terminateStaffSession, type PortalScope } from "./sessionManager";
 
 export type StaffRole = "manager" | "staff" | "platform_admin";
 
@@ -108,12 +109,16 @@ export function getSessionRestaurantId(session: Session | null): string | null {
 }
 
 /**
- * Performs a clean sign out from Supabase across tabs and local storage.
+ * Performs a clean sign out from Supabase across tabs and local storage for the specified scope.
  */
-export async function signOutStaff(): Promise<void> {
+export async function signOutStaff(scope: PortalScope = "manager"): Promise<void> {
   try {
-    await supabaseManager.auth.signOut();
+    await terminateStaffSession(scope, "manual");
   } catch (err) {
-    console.error("[signOutStaff] Error signing out:", err);
+    console.error(`[signOutStaff:${scope}] Error signing out:`, err);
+    try {
+      const client = scope === "kitchen" ? supabaseKitchen : supabaseManager;
+      await client.auth.signOut();
+    } catch {}
   }
 }

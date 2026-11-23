@@ -1,4 +1,9 @@
-import { supabaseManager } from "./supabaseManager";
+import {
+  checkStaffSessionValidity,
+  terminateStaffSession,
+  getSupabaseClient,
+  type PortalScope,
+} from "./sessionManager";
 
 /**
  * Custom error class for authenticated fetch operations
@@ -23,21 +28,43 @@ export class AuthFetchError extends Error {
   }
 }
 
+function resolveScope(input: string, explicitScope?: PortalScope): PortalScope {
+  if (explicitScope) return explicitScope;
+  if (input.includes("/api/kitchen")) return "kitchen";
+  if (input.includes("/api/admin") || input.includes("/api/billing")) return "manager";
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/kitchen")) {
+    return "kitchen";
+  }
+  return "manager";
+}
+
 /**
- * Proactively verifies that the Supabase session is valid and not expired.
+ * Proactively verifies that the Supabase session is valid and not expired for the resolved scope.
  * Refreshes the session if the token is within 45 seconds of expiration.
  */
-async function getValidAccessToken(): Promise<string | null> {
+async function getValidAccessToken(scope: PortalScope): Promise<string | null> {
+  const client = getSupabaseClient(scope);
   try {
-    const { data } = await supabaseManager.auth.getSession();
+    const { data } = await client.auth.getSession();
     let session = data.session;
 
     if (session) {
+      // Validate staff session against midnight IST and 30-min inactivity limits
+      if (typeof window !== "undefined") {
+        const validity = checkStaffSessionValidity(session.user.id, Date.now(), scope);
+        if (!validity.valid) {
+          if (validity.reason && validity.reason !== "no_session") {
+            await terminateStaffSession(scope, validity.reason, validity.message);
+          }
+          return null;
+        }
+      }
+
       const now = Math.floor(Date.now() / 1000);
       // If token expires in less than 45 seconds or is already expired, refresh it proactively
       if (session.expires_at && session.expires_at - now < 45) {
         const { data: refreshed, error: refreshErr } =
-          await supabaseManager.auth.refreshSession();
+          await client.auth.refreshSession();
         if (!refreshErr && refreshed.session) {
           session = refreshed.session;
         }
@@ -46,21 +73,37 @@ async function getValidAccessToken(): Promise<string | null> {
     }
     return null;
   } catch (err) {
-    console.warn("[authFetch] Failed to check or refresh auth session:", err);
+    console.warn(`[authFetch:${scope}] Failed to check or refresh auth session:`, err);
     return null;
   }
 }
 
+export interface AuthFetchOptions extends RequestInit {
+  scope?: PortalScope;
+}
+
 /**
- * Like fetch, but sends the logged-in manager/staff authorization token with the request.
- * Automatically manages token refreshing, handles expired sessions, and handles
- * transient network failures gracefully.
+ * Like fetch, but sends the logged-in manager or kitchen authorization token with the request.
+ * Automatically resolves the appropriate client scope (manager vs kitchen), manages token refreshing,
+ * handles expired sessions, and handles transient network failures gracefully.
  */
 export async function authFetch(
   input: string,
-  init: RequestInit = {}
+  init: AuthFetchOptions = {}
 ): Promise<Response> {
-  let token = await getValidAccessToken();
+  const scope = resolveScope(input, init.scope);
+  const client = getSupabaseClient(scope);
+  let token = await getValidAccessToken(scope);
+
+  if (!token && typeof window !== "undefined") {
+    const validity = checkStaffSessionValidity(undefined, Date.now(), scope);
+    if (!validity.valid && validity.reason && validity.reason !== "no_session") {
+      throw new AuthFetchError(
+        validity.message || "Your session has expired. Please log in again.",
+        { isAuthError: true }
+      );
+    }
+  }
   const headers = new Headers(init.headers);
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -84,7 +127,7 @@ export async function authFetch(
     if (isIdempotent) {
       await new Promise((r) => setTimeout(r, 300));
       try {
-        token = await getValidAccessToken();
+        token = await getValidAccessToken(scope);
         if (token) {
           headers.set("Authorization", `Bearer ${token}`);
         }
@@ -109,7 +152,7 @@ export async function authFetch(
   if (res.status === 401 && token) {
     try {
       const { data: refreshed, error: refreshErr } =
-        await supabaseManager.auth.refreshSession();
+        await client.auth.refreshSession();
       if (!refreshErr && refreshed.session) {
         headers.set("Authorization", `Bearer ${refreshed.session.access_token}`);
         res = await fetch(input, { ...init, headers });

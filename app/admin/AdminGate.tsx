@@ -11,6 +11,14 @@ import {
   getSessionRole,
   signOutStaff,
 } from "@/lib/authHelper";
+import {
+  checkStaffSessionValidity,
+  initializeStaffSession,
+  getStoredExpiryNotice,
+  subscribeToSessionLifecycle,
+  recordUserActivity,
+  terminateStaffSession,
+} from "@/lib/sessionManager";
 import { LockIcon, LogOutIcon, ChefHatIcon, AlertCircleIcon, CheckCircleIcon } from "@/components/ui/icons";
 
 export default function AdminGate({ children }: { children: ReactNode }) {
@@ -19,6 +27,9 @@ export default function AdminGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [expiryNotice, setExpiryNotice] = useState<string>(() =>
+    typeof window !== "undefined" ? getStoredExpiryNotice("manager") || "" : ""
+  );
   const [busy, setBusy] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -28,24 +39,88 @@ export default function AdminGate({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     // Load active session from persistent storage
-    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
+    supabase.auth.getSession().then(async ({ data, error: sessionErr }) => {
       if (!isMounted) return;
       if (sessionErr) {
         console.warn("[AdminGate] Session initialization notice:", sessionErr.message);
       }
-      setSession(data.session);
+
+      if (data.session) {
+        // Enforce role: manager or platform_admin ONLY
+        const role = getSessionRole(data.session);
+        if (role !== "manager" && role !== "platform_admin") {
+          await terminateStaffSession("manager", "no_session");
+          setSession(null);
+          setReady(true);
+          return;
+        }
+
+        const validity = checkStaffSessionValidity(data.session.user.id, Date.now(), "manager");
+        if (!validity.valid) {
+          if (validity.message) {
+            setExpiryNotice(validity.message);
+          }
+          await terminateStaffSession("manager", validity.reason || "no_session", validity.message);
+          setSession(null);
+        } else {
+          recordUserActivity("manager");
+          setSession(data.session);
+        }
+      } else {
+        setSession(null);
+      }
       setReady(true);
     });
 
     // Subscribe to auth state changes across tabs and windows
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, s) => {
       if (!isMounted) return;
-      setSession(s);
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+      } else if (event === "SIGNED_IN" && s) {
+        const role = getSessionRole(s);
+        if (role !== "manager" && role !== "platform_admin") {
+          setSession(null);
+          return;
+        }
+        const validity = checkStaffSessionValidity(s.user.id, Date.now(), "manager");
+        if (validity.valid) {
+          setSession(s);
+        } else {
+          setSession(null);
+        }
+      } else {
+        const role = getSessionRole(s);
+        if (role && role !== "manager" && role !== "platform_admin") {
+          setSession(null);
+        } else {
+          setSession(s);
+        }
+      }
     });
+
+    // Subscribe to session lifecycle (activity monitoring, inactivity timeout, midnight IST, multi-tab sync)
+    const unsubscribeLifecycle = subscribeToSessionLifecycle(
+      {
+        onExpired: (reason, message) => {
+          if (!isMounted) return;
+          setSession(null);
+          if (message) {
+            setExpiryNotice(message);
+          } else if (reason === "inactivity") {
+            setExpiryNotice("Your session has expired due to inactivity. Please log in again.");
+          } else if (reason === "daily_expired") {
+            setExpiryNotice("Your daily session has expired. Please log in again for today.");
+          }
+        },
+      },
+      "manager"
+    );
 
     return () => {
       isMounted = false;
       authListener.subscription.unsubscribe();
+      unsubscribeLifecycle();
     };
   }, []);
 
@@ -55,6 +130,7 @@ export default function AdminGate({ children }: { children: ReactNode }) {
     submittingRef.current = true;
     setBusy(true);
     setError("");
+    setExpiryNotice("");
 
     try {
       const cleanEmail = email.trim();
@@ -74,8 +150,16 @@ export default function AdminGate({ children }: { children: ReactNode }) {
       }
 
       if (data?.session) {
+        const role = getSessionRole(data.session);
+        if (role !== "manager" && role !== "platform_admin") {
+          await signOutStaff("manager");
+          setError("Access denied: Kitchen staff credentials cannot access the Restaurant Admin Console.");
+          return;
+        }
+        initializeStaffSession(data.session.user.id, "manager");
         setSession(data.session);
         setPassword("");
+        setExpiryNotice("");
       }
     } catch (err) {
       setError(formatAuthError(err));
@@ -120,8 +204,9 @@ export default function AdminGate({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     setBusy(true);
-    await signOutStaff();
+    await signOutStaff("manager");
     setSession(null);
+    setExpiryNotice("");
     setBusy(false);
   };
 
@@ -163,6 +248,16 @@ export default function AdminGate({ children }: { children: ReactNode }) {
               ? "Enter your registered manager email to receive a secure recovery link."
               : "Manager credentials required to configure menu, tables, QR codes and reports"}
           </p>
+
+          {expiryNotice && !forgotMode && (
+            <div
+              role="alert"
+              className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 border border-amber-300 flex items-start gap-2.5 mb-4 text-left"
+            >
+              <AlertCircleIcon className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span className="leading-snug">{expiryNotice}</span>
+            </div>
+          )}
 
           {forgotMode ? (
             <form onSubmit={handleResetPassword} className="space-y-4 text-left">

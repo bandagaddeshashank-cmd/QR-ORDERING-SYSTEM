@@ -17,7 +17,7 @@ import {
   CloseIcon,
   SmartphoneIcon,
 } from "@/components/ui/icons";
-import { supabaseManager as supabase } from "@/lib/supabaseManager";
+import { signOutStaff } from "@/lib/authHelper";
 
 export type AdminTab = "overview" | "menu" | "tables" | "reports" | "settings";
 
@@ -91,7 +91,7 @@ export default function AdminSidebar({
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOutStaff("manager");
     } catch (err) {
       console.error("[AdminSidebar] Sign out error:", err);
     }
