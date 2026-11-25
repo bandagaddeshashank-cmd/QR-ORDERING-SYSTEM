@@ -18,7 +18,7 @@ import {
   recordUserActivity,
   terminateStaffSession,
 } from "@/lib/sessionManager";
-import { LockIcon, LogOutIcon, AlertCircleIcon, CheckCircleIcon } from "@/components/ui/icons";
+import { LockIcon, LogOutIcon, AlertCircleIcon, CheckCircleIcon, EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 
 export default function KitchenGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -29,6 +29,7 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
   const [expiryNotice, setExpiryNotice] = useState<string>(() =>
     typeof window !== "undefined" ? getStoredExpiryNotice("kitchen") || "" : ""
   );
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -362,16 +363,32 @@ export default function KitchenGate({ children }: { children: ReactNode }) {
                     Forgot password?
                   </button>
                 </div>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  disabled={busy}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="h-12 w-full rounded-xl border border-white/15 bg-[#1C2523] px-3.5 text-sm font-medium text-white placeholder:text-stone-500 focus:border-[#E8B95B] focus:bg-[#202b28] focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    disabled={busy}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-12 w-full rounded-xl border border-white/15 bg-[#1C2523] pl-3.5 pr-11 text-sm font-medium text-white placeholder:text-stone-500 focus:border-[#E8B95B] focus:bg-[#202b28] focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-[#E8B95B] focus:outline-none transition-colors cursor-pointer"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOffIcon className="w-5 h-5" />
+                    ) : (
+                      <EyeIcon className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error && (
